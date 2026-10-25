@@ -1,12 +1,12 @@
-Emote Together 0.2.0 - serverless validation record
+Emote Together 0.3.0 - serverless validation record
 Date: 2026-10-25 (Europe/Oslo)
 
 Environment: Windows x64, .NET SDK 10.0.401, installed Dalamud 15.0.3.9 / API 15.
 dotnet build EmoteTogether.slnx -c Release: PASS, 0 warnings, 0 errors.
 Clock synchronization: PASS, 12 assertions, long chat queue time excluded.
 Chat codec and identities: PASS, 11 scenarios / 390 assertions.
-Paced chat transport: PASS, 15 assertions.
-Serverless group simulations: PASS, 33 assertions with 2, 3 and 8 participants.
+Paced chat transport: PASS, 20 assertions.
+Serverless group simulations: PASS, 49 assertions with 2, 3 and 8 participants.
   Real encoded/framed payloads over a simulated chat bus, 1500ms send spacing.
   Independently skewed clocks, authenticated senders, explicit invitation acceptance.
   Decline, stale/forged snapshots, guest permissions, all-ready barrier and shared deadline.
@@ -15,9 +15,20 @@ Serverless group simulations: PASS, 33 assertions with 2, 3 and 8 participants.
   Queued invitation purged on close; joining group closed before roster arrives.
   Simultaneous accepts survive roster coalescing; all 8 receive a future deadline.
   Dropped messages, preparation timeout and peer liveness expiration.
-Package contains plugin, client and protocol assemblies, manifest and deps.json.
+  Configured pair countdowns of 3, 5 and 10 seconds are preserved without the old 15-second floor.
+  Large group and partial-fragment queues expose a delivery minimum before scheduling.
+Leadership transfer: PASS, 7 scenarios / 33 assertions.
+  Chained handoff, exclusive authority, 2/3/8 participants, all-member acknowledgements.
+  New leader can start; former leader cannot; clocks resynchronize to the new leader.
+  Forged/stale packets, rejoining membership proofs, active-run block and group close.
+  Missing offer retains previous leader; uncertain commit fails closed; bounded retry recovers lost ACK.
+Package contains plugin, client and protocol assemblies, manifest, deps.json and Assets/tiger-mouth.jpg.
+Artwork generated with built-in imagegen, 1536x1024; runtime JPEG optimized at quality 88.
+Configuration inspected: CountdownSeconds=3, ShowTigerBackground=true by default.
+Settings callback and in-window settings both open the appearance popup; saved false is preserved.
 No relay, WebSocket/TCP client, URL settings, or server process is included.
 
 No real chat messages were sent during validation.
-Not tested: live /tell delivery/suppression, native animation execution inside FFXIV,
+Live log confirms prior version 0.2.0 loaded in Dalamud without startup errors.
+Not tested for 0.3.0: live /tell delivery/suppression, native animation execution inside FFXIV,
 two actual game clients, visual UI layout in a live game, game anti-spam behavior.

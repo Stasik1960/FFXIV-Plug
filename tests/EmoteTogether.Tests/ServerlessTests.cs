@@ -11,6 +11,7 @@ internal static class ServerlessTests
         ConsentAndAuthority();
         CloseBeforeDelivery();
         FirstStartWaitsForClocks();
+        ConfigurableCountdown();
         ThreePlayerRun();
         RefusalAndPartition();
         FullGroup();
@@ -115,6 +116,8 @@ internal static class ServerlessTests
         scene.Until(() => scene.Nodes.All(n => n.Schedules.Count == 1), "eight-member schedule", 120_000);
         Check(scene.Nodes.Select(n => n.Schedules[0].RunId).Distinct().Count() == 1, "eight members share one run");
         Check(scene.Nodes.All(n => n.Client.ScheduledStartAtUnixMs - n.Client.LeaderNowUnixMs >= 500), "all schedules before deadline");
+        Check(host.Client.RequestedCountdownSeconds == 3 && host.Client.EffectiveCountdownSeconds >= 10,
+            "larger group exposes its delivery-constrained countdown instead of hiding it");
         Check(scene.SentFrames.All(f => f.Text.Length <= ChatCodec.MaxFrameLength), "all frames fit bounds");
         foreach (var node in scene.Nodes)
         {
@@ -188,6 +191,34 @@ internal static class ServerlessTests
         guest.Client.SetReady(prepared.RunId!, true);
         scene.Until(() => host.Schedules.Count == 1 && guest.Schedules.Count == 1, "first run after clock negotiation");
         Check(host.Schedules[0].StartAtUnixMs == guest.Schedules[0].StartAtUnixMs, "first-start shared deadline");
+    }
+
+    private static void ConfigurableCountdown()
+    {
+        foreach (var seconds in new[] { 3, 5, 10 })
+        {
+            using var scene = new Scene();
+            var host = scene.Add("Leader Player@World");
+            var guest = scene.Add("Guest Player@World");
+            host.Client.CreateGroup();
+            scene.Join(host, guest);
+            scene.Until(() => guest.Client.ClockReady, "clocks for configurable countdown");
+            host.Client.Start(21, 0);
+            Check(host.Client.PendingRunId == null, "zero countdown rejected");
+            host.Client.Start(21, -1);
+            Check(host.Client.PendingRunId == null, "negative countdown rejected");
+            host.Client.Start(21, 61);
+            Check(host.Client.PendingRunId == null, "excessive countdown rejected");
+            host.Client.PrepareReceived += p => host.Client.SetReady(p.RunId!, true);
+            guest.Client.PrepareReceived += p => guest.Client.SetReady(p.RunId!, true);
+            long scheduledAt = 0;
+            host.Client.ScheduledReceived += _ => scheduledAt = scene.Now;
+            host.Client.Start(21, seconds);
+            scene.Until(() => host.Schedules.Count == 1 && guest.Schedules.Count == 1, $"{seconds}-second pair schedule");
+            Check(host.Schedules[0].StartAtUnixMs - scheduledAt == seconds * 1_000L, $"pair honors selected {seconds}-second countdown");
+            Check(guest.Client.RequestedCountdownSeconds == seconds && host.Client.EffectiveCountdownSeconds == seconds && guest.Client.EffectiveCountdownSeconds == seconds,
+                "requested and agreed countdown delivered to both participants");
+        }
     }
     private sealed class Scene : IDisposable
     {

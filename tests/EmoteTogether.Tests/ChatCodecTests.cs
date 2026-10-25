@@ -169,18 +169,18 @@ internal static class ChatCodecTests
         var assembler = new ChatFrameAssembler();
         foreach (var frame in new[]
         {
-            "", "[ET2]", "[ET2]garbage", $"[ET2]short.1.1.AA", "[ET2]zzzzzzzzzzzz.1.1.AA",
-            $"[ET2]{id}.0.1.AA", $"[ET2]{id}.2.1.AA", $"[ET2]{id}.1.0.AA", $"[ET2]{id}.1.9.AA",
-            $"[ET2]{id}.01.1.AA", $"[ET2]{id}.1.01.AA", $"[ET2]{id}.1.1.", $"[ET2]{id}.1.1.AA=",
-            $"[ET2]{id}.1.1.***", $"[ET2]{id}.1.1.AA.AA", $"[ET2]{id}.1.2.AA",
-            $"[ET2]{id}.1.1.AA\n", "[ET2]" + new string('a', 240),
+            "", "[ET3]", "[ET3]garbage", $"[ET3]short.1.1.AA", "[ET3]zzzzzzzzzzzz.1.1.AA",
+            $"[ET3]{id}.0.1.AA", $"[ET3]{id}.2.1.AA", $"[ET3]{id}.1.0.AA", $"[ET3]{id}.1.9.AA",
+            $"[ET3]{id}.01.1.AA", $"[ET3]{id}.1.01.AA", $"[ET3]{id}.1.1.", $"[ET3]{id}.1.1.AA=",
+            $"[ET3]{id}.1.1.***", $"[ET3]{id}.1.1.AA.AA", $"[ET3]{id}.1.2.AA",
+            $"[ET3]{id}.1.1.AA\n", "[ET3]" + new string('a', 240),
         })
         {
             Check(!ChatCodec.IsFrame(frame), $"Malformed frame cannot be classified as valid: {frame}");
             Check(!assembler.TryAccept(Sender, frame, 6_000, out var decoded) && decoded == null,
                 "Malformed frame must be rejected without producing a packet.");
         }
-        Check(!assembler.TryAccept(Sender, $"[ET2]{id}.1.1.AA", 6_001, out var corrupt) && corrupt == null,
+        Check(!assembler.TryAccept(Sender, $"[ET3]{id}.1.1.AA", 6_001, out var corrupt) && corrupt == null,
             "Syntactically valid but corrupt Brotli payload must be rejected safely.");
     }
 
@@ -297,7 +297,7 @@ internal static class ChatCodecTests
         var count = (payload.Length + 195) / 196;
         Check(count is > 0 and <= 8, "Test fixture must fit the valid framing envelope.");
         var id = Guid.NewGuid().ToString("N")[..12];
-        return Enumerable.Range(0, count).Select(i => $"[ET2]{id}.{i + 1}.{count}.{payload.Substring(i * 196, Math.Min(196, payload.Length - i * 196))}").ToArray();
+        return Enumerable.Range(0, count).Select(i => $"[ET3]{id}.{i + 1}.{count}.{payload.Substring(i * 196, Math.Min(196, payload.Length - i * 196))}").ToArray();
     }
 
     private static void Equivalent(Packet expected, Packet? actual)

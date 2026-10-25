@@ -12,6 +12,9 @@ try {
     foreach ($name in @('EmoteTogether.dll', 'EmoteTogether.json', 'EmoteTogether.deps.json', 'EmoteTogether.Client.dll', 'EmoteTogether.Protocol.dll')) {
         Copy-Item -LiteralPath (Join-Path $pluginOutput $name) -Destination $pluginDist -Force
     }
+    $assetDist = Join-Path $pluginDist 'Assets'
+    New-Item -ItemType Directory -Path $assetDist -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $pluginOutput 'Assets/tiger-mouth.jpg') -Destination $assetDist -Force
     Write-Host 'Ready: dist/plugin. No separate server or runtime installation is required.'
 }
 finally { Pop-Location }

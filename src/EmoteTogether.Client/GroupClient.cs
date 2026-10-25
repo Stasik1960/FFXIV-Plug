@@ -5,7 +5,7 @@ namespace EmoteTogether.Client;
 
 /// <summary>A leader-authoritative group carried by game-authenticated private chat.</summary>
 /// <remarks>All state changes and public events occur on the caller's thread. Call Poll once per frame.</remarks>
-public sealed class GroupClient : IDisposable
+public sealed partial class GroupClient : IDisposable
 {
     public const int MaxMembers = 8;
     public const long InviteLifetimeMs = 90_000;
@@ -33,6 +33,7 @@ public sealed class GroupClient : IDisposable
     private ActiveRun? activeRun;
     private bool disposed;
     private bool localReady;
+    private readonly string countdownProbeId = NewId();
     private bool resetting;
 
     public GroupClient(IChatTransport transport, Func<long>? nowMs = null)
@@ -58,6 +59,14 @@ public sealed class GroupClient : IDisposable
     public long LeaderNowUnixMs => now() + (IsLeader ? 0 : (long)Math.Round(synchronization.OffsetMs));
     public bool ClockReady => IsLeader || (GroupId is not null && synchronization.IsReady(now()));
     public double RoundTripMs => IsLeader ? 0 : synchronization.RoundTripMs;
+    public int RequestedCountdownSeconds { get; private set; } = 3;
+    public int EffectiveCountdownSeconds { get; private set; } = 3;
+    public int MinimumCountdownSeconds => Members.Length < 2 ? 1 : MinimumForPacket(new Packet
+    {
+        Type = Kind.Scheduled, GroupId = GroupId, Revision = revision,
+        RunId = activeRun?.Id ?? countdownProbeId, EmoteId = activeRun?.EmoteId ?? ushort.MaxValue,
+        StartAtUnixMs = now() + 60_000, CountdownSeconds = 60,
+    });
 
     public event Action<Packet>? PrepareReceived;
     public event Action<Packet>? ScheduledReceived;
@@ -154,16 +163,17 @@ public sealed class GroupClient : IDisposable
         ClearGroup("Вы вышли из эмоциональной группы.", false);
     }
 
-    public void Start(uint emoteId)
+    public void Start(uint emoteId, int countdownSeconds = 3)
     {
         if (!RequireLeader()) return;
         if (emoteId is 0 or > ushort.MaxValue) { Status = "Некорректная эмоция."; return; }
+        if (countdownSeconds is < 1 or > 60) { Status = "Выберите задержку старта от 1 до 60 секунд."; return; }
         if (Members.Length < 2) { Status = "Пригласите хотя бы одного участника."; return; }
         if (activeRun is not null) { Status = "Предыдущий запуск ещё не завершён."; return; }
         if (transport.PendingFrames > 24) { Status = "Подождите, пока отправятся сообщения группы."; return; }
         var timeout = Math.Max(60_000, (transport.PendingFrames + Members.Length * 2L + 2) * transport.SendIntervalMs + 15_000);
-        activeRun = new ActiveRun(NewId(), emoteId, Members.Select(m => m.Id).ToArray(), now() + timeout);
-        var packet = new Packet { Type = Kind.Prepare, GroupId = GroupId, Revision = revision, RunId = activeRun.Id, EmoteId = emoteId };
+        activeRun = new ActiveRun(NewId(), emoteId, Members.Select(m => m.Id).ToArray(), now() + timeout, countdownSeconds);
+        var packet = new Packet { Type = Kind.Prepare, GroupId = GroupId, Revision = revision, RunId = activeRun.Id, EmoteId = emoteId, CountdownSeconds = countdownSeconds };
         if (!Broadcast(packet)) return;
         PrepareLocal(packet);
     }
@@ -208,6 +218,7 @@ public sealed class GroupClient : IDisposable
         for (var i = 0; i < 256 && received.TryDequeue(out var envelope); i++) Receive(envelope);
         if (!IsConnected) return;
         var time = now();
+        PollLeadership(time);
         if (Invitation is not null && time >= invitationDeadline) { Invitation = null; Status = "Время приглашения истекло."; }
         if (joining is { } pending && time >= pending.Expires)
         {
@@ -266,6 +277,7 @@ public sealed class GroupClient : IDisposable
         var packet = envelope.Packet;
         var sender = Normalize(envelope.Sender);
         if (!IsConnected || sender is null || Same(sender, identity) || packet.ProtocolVersion != Packet.Version) return;
+        if (HandleLeadership(sender, packet, envelope.ReceivedAtUnixMs)) return;
         if (packet.Type == Kind.Invitation) { ReceiveInvitation(sender, packet); return; }
         if (packet.Type == Kind.RespondInvite) { ReceiveInviteResponse(sender, packet); return; }
         if (packet.Type == Kind.InviteResult) { ReceiveInviteResult(sender, packet); return; }
@@ -283,6 +295,7 @@ public sealed class GroupClient : IDisposable
         {
             if (!Members.Any(m => Same(m.Id, sender))) return;
             memberSeen[sender] = now();
+            ObserveLeadershipMember(sender);
             switch (packet.Type)
             {
                 case Kind.Ping:
@@ -409,6 +422,8 @@ public sealed class GroupClient : IDisposable
         if (packet.RunId is null || !Remember(packet.RunId, seenRuns, recentRuns)) return;
         PendingRunId = packet.RunId;
         localReady = false;
+        RequestedCountdownSeconds = packet.CountdownSeconds is >= 1 and <= 60 ? packet.CountdownSeconds : 3;
+        EffectiveCountdownSeconds = RequestedCountdownSeconds;
         PendingEmoteId = packet.EmoteId;
         ScheduledStartAtUnixMs = null;
         prepareReceivedAt = now();
@@ -424,12 +439,22 @@ public sealed class GroupClient : IDisposable
         if (run.StartAt != 0) return;
         run.Ready.Add(sender);
         if (run.Ready.Count != run.Participants.Length) return;
-        var lead = (transport.PendingFrames + run.Participants.Length * 2L + 2) * transport.SendIntervalMs + 6_000;
-        if (lead > 115_000) { AbortRun("Очередь сообщений занята; повторите запуск позже."); return; }
-        run.StartAt = now() + Math.Max(6_000, lead);
-        var scheduled = new Packet { Type = Kind.Scheduled, GroupId = GroupId, Revision = revision,
-            RunId = run.Id, EmoteId = run.EmoteId, StartAtUnixMs = run.StartAt };
-        if (Broadcast(scheduled)) ScheduleLocal(scheduled);
+        var time = now();
+        var seconds = run.CountdownSeconds;
+        Packet scheduled;
+        // Encoding can cross a fragment boundary after the timestamp/delay changes. Only raise
+        // the deadline, and recalculate the actual packet until its own delivery budget fits.
+        do
+        {
+            scheduled = new Packet { Type = Kind.Scheduled, GroupId = GroupId, Revision = revision,
+                RunId = run.Id, EmoteId = run.EmoteId, StartAtUnixMs = time + seconds * 1_000L, CountdownSeconds = seconds };
+            var required = MinimumForPacket(scheduled);
+            if (required <= seconds) break;
+            seconds = required;
+        } while (seconds <= 115);
+        if (seconds > 115) { AbortRun("Очередь сообщений занята; повторите запуск позже."); return; }
+        run.StartAt = scheduled.StartAtUnixMs;
+        if (Broadcast(scheduled, true)) ScheduleLocal(scheduled);
     }
 
     private void ScheduleLocal(Packet packet)
@@ -444,7 +469,11 @@ public sealed class GroupClient : IDisposable
             return;
         }
         ScheduledStartAtUnixMs = packet.StartAtUnixMs;
-        Status = "Общий обратный отсчёт.";
+        EffectiveCountdownSeconds = packet.CountdownSeconds is >= 1 and <= 115
+            ? packet.CountdownSeconds : (int)Math.Ceiling(remaining / 1_000d);
+        Status = EffectiveCountdownSeconds > RequestedCountdownSeconds
+            ? $"Отсчёт {EffectiveCountdownSeconds} с: учтена доставка сообщений всей группе."
+            : "Общий обратный отсчёт.";
         ScheduledReceived?.Invoke(packet);
     }
 
@@ -500,6 +529,7 @@ public sealed class GroupClient : IDisposable
 
     private void ClearGroup(string reason, bool purgeOutbound = true)
     {
+        ClearLeadership();
         if (purgeOutbound)
         {
             if (GroupId is { } group) transport.ForgetGroup(group);
@@ -537,6 +567,7 @@ public sealed class GroupClient : IDisposable
     }
     private bool RequireLeader()
     {
+        if (IsTransferringLeadership) { Status = "Дождитесь завершения передачи лидерства."; return false; }
         if (RequireIdentity() && IsLeader) return true;
         Status = "Это действие доступно лидеру эмоциональной группы.";
         return false;
@@ -561,6 +592,9 @@ public sealed class GroupClient : IDisposable
         return GameIdentity.TryNormalize(value, out var normalized) ? normalized : null;
     }
 
+    private int MinimumForPacket(Packet packet) => Math.Max(1,
+        (int)Math.Ceiling(transport.EstimatePriorityBroadcastMs(packet, Math.Max(0, Members.Length - 1)) / 1_000d));
+
     public void Dispose()
     {
         if (disposed) return;
@@ -573,12 +607,13 @@ public sealed class GroupClient : IDisposable
 
     private sealed record OutgoingInvite(string Target, long Expires);
     private sealed record Joining(string Group, string Leader, string Invite, long Expires);
-    private sealed class ActiveRun(string id, uint emoteId, string[] participants, long readyDeadline)
+    private sealed class ActiveRun(string id, uint emoteId, string[] participants, long readyDeadline, int countdownSeconds)
     {
         public string Id { get; } = id;
         public uint EmoteId { get; } = emoteId;
         public string[] Participants { get; } = participants;
         public long ReadyDeadline { get; } = readyDeadline;
+        public int CountdownSeconds { get; } = countdownSeconds;
         public HashSet<string> Ready { get; } = new(Names);
         public long StartAt { get; set; }
     }

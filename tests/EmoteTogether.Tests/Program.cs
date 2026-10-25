@@ -12,6 +12,7 @@ internal static class Program
             ChatCodecTests.Run();
             TransportTests.Run();
             ServerlessTests.Run();
+            LeadershipTests.Run();
             Console.WriteLine("PASS: all serverless checks completed. No real game chat was sent.");
             return 0;
         }

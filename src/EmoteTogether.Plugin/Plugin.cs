@@ -21,6 +21,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static ICondition Conditions { get; private set; } = null!;
     [PluginService] internal static ITargetManager Targets { get; private set; } = null!;
     [PluginService] internal static IChatGui Chat { get; private set; } = null!;
+    [PluginService] internal static ITextureProvider Textures { get; private set; } = null!;
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
 
     internal Configuration Configuration { get; }
@@ -47,6 +48,8 @@ public sealed class Plugin : IDalamudPlugin
     public Plugin()
     {
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new();
+        Configuration.Version = 3;
+        Configuration.CountdownSeconds = Math.Clamp(Configuration.CountdownSeconds, 1, 60);
         var transport = new GameChatTransport(Chat, () => clock.UnixMilliseconds);
         Client = new GroupClient(transport, () => clock.UnixMilliseconds);
         Emotes = new GameEmotes(Data, ClientState, Objects, Conditions);
@@ -58,7 +61,7 @@ public sealed class Plugin : IDalamudPlugin
         });
         PluginInterface.UiBuilder.Draw += windows.Draw;
         PluginInterface.UiBuilder.OpenMainUi += OpenWindow;
-        PluginInterface.UiBuilder.OpenConfigUi += OpenWindow;
+        PluginInterface.UiBuilder.OpenConfigUi += OpenSettings;
         Framework.Update += OnUpdate;
         Client.PrepareReceived += OnPrepare;
         Client.ScheduledReceived += OnScheduled;
@@ -75,6 +78,18 @@ public sealed class Plugin : IDalamudPlugin
         Client.Cancel();
         ClearRun();
         LocalStatus = "Запуск отменён.";
+    }
+
+    internal void SaveCountdown(int seconds)
+    {
+        Configuration.CountdownSeconds = Math.Clamp(seconds, 1, 60);
+        PluginInterface.SavePluginConfig(Configuration);
+    }
+
+    internal void SaveAppearance(bool showTiger)
+    {
+        Configuration.ShowTigerBackground = showTiger;
+        PluginInterface.SavePluginConfig(Configuration);
     }
 
     private void OnPrepare(Packet packet)
@@ -221,6 +236,7 @@ public sealed class Plugin : IDalamudPlugin
 
     private void OnCommand(string command, string arguments) => window.Toggle();
     private void OpenWindow() => window.IsOpen = true;
+    private void OpenSettings() => window.OpenSettings();
 
     public void Dispose()
     {
@@ -229,7 +245,7 @@ public sealed class Plugin : IDalamudPlugin
         Framework.Update -= OnUpdate;
         PluginInterface.UiBuilder.Draw -= windows.Draw;
         PluginInterface.UiBuilder.OpenMainUi -= OpenWindow;
-        PluginInterface.UiBuilder.OpenConfigUi -= OpenWindow;
+        PluginInterface.UiBuilder.OpenConfigUi -= OpenSettings;
         Commands.RemoveHandler("/emotegroup");
         Client.PrepareReceived -= OnPrepare;
         Client.ScheduledReceived -= OnScheduled;

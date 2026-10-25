@@ -24,6 +24,17 @@ public abstract class PacedChatTransport : IChatTransport
     public string? LastError { get; private set; }
     public event Action<ChatEnvelope>? MessageReceived;
 
+    // Urgent packets overtake unsent work, but a fragmented message already on the wire finishes first.
+    // The final frame must reach the final recipient before the common deadline.
+    public int EstimatePriorityBroadcastMs(Packet packet, int recipients)
+    {
+        if (recipients <= 0) return 0;
+        var frames = ChatCodec.Encode(Stamp(packet, nowMs())).Count;
+        var partial = outgoing.First is { Value.Index: > 0 } first ? first.Value.Estimate - first.Value.Index : 0;
+        var cooldown = Math.Max(0, nextSendAt - nowMs());
+        return checked((int)Math.Min(int.MaxValue, cooldown + (partial + frames * (long)recipients - 1) * SendIntervalMs + 1_000));
+    }
+
     public void SendTo(string recipient, Packet packet, bool urgent = false)
     {
         ObjectDisposedException.ThrowIf(disposed, this);

@@ -1,6 +1,6 @@
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <AssemblyName>EmoteTogether</AssemblyName>
     <RootNamespace>EmoteTogether.Plugin</RootNamespace>
     <Nullable>enable</Nullable>
@@ -15,5 +15,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../EmoteTogether.Client/EmoteTogether.Client.csproj" />
+    <Content Include="Assets/tiger-mouth.jpg" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

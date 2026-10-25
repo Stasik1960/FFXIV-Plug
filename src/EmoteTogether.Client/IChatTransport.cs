@@ -13,6 +13,7 @@ public interface IChatTransport : IDisposable
     int SendIntervalMs { get; }
     event Action<ChatEnvelope>? MessageReceived;
     void SendTo(string recipient, Packet packet, bool urgent = false);
+    int EstimatePriorityBroadcastMs(Packet packet, int recipients);
     void ForgetRun(string runId);
     void ForgetGroup(string groupId);
     void Poll();

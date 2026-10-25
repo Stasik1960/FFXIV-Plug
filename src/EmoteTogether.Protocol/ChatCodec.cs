@@ -5,7 +5,7 @@ namespace EmoteTogether.Protocol;
 
 public static class ChatCodec
 {
-    public const string Prefix = "[ET2]";
+    public const string Prefix = "[ET3]";
     public const int MaxFrameLength = 240;
     public const int MaxFragments = 8;
     private const int ChunkLength = 196;
@@ -15,6 +15,7 @@ public static class ChatCodec
         Kind.Invite, Kind.Invitation, Kind.RespondInvite, Kind.InviteResult, Kind.LeaveGroup,
         Kind.GroupClosed, Kind.Start, Kind.Prepare, Kind.Ready, Kind.Scheduled,
         Kind.Cancel, Kind.Cancelled, Kind.Error, Kind.Leave,
+        LeadershipKinds.Offer, LeadershipKinds.Ready, LeadershipKinds.Changed, LeadershipKinds.Ack, LeadershipKinds.Settled,
     ];
 
     public static IReadOnlyList<string> Encode(Packet packet)

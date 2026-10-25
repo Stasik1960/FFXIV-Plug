@@ -55,7 +55,62 @@ internal static class TransportTests
         try { for (var i = 0; i < 140; i++) transport.SendTo("Guest Player@World", new Packet { Type = Kind.Ready, RunId = Guid.NewGuid().ToString("N"), Ready = true }); }
         catch (InvalidOperationException) { full = true; }
         Check(full && transport.PendingFrames <= 128, "bounded queue");
+        PriorityScheduleBudget();
         Console.WriteLine($"PASS: paced chat transport ({count} assertions)");
+    }
+
+    private static void PriorityScheduleBudget()
+    {
+        long time = 1_800_000_000_000;
+        using var transport = new Recorder(() => time);
+        transport.Reset("Leader Player@World");
+        var group = Guid.NewGuid().ToString("N");
+        var scheduled = new Packet { Type = Kind.Scheduled, GroupId = group, RunId = Guid.NewGuid().ToString("N"),
+            EmoteId = 21, Revision = 1, CountdownSeconds = 3, StartAtUnixMs = time + 3_000 };
+        var withoutBacklog = transport.EstimatePriorityBroadcastMs(scheduled, 1);
+        for (var i = 0; i < 20; i++) transport.SendTo("Guest Player@World", new Packet { Type = Kind.Ping, GroupId = group, Nonce = Guid.NewGuid().ToString("N") });
+        Check(transport.EstimatePriorityBroadcastMs(scheduled, 1) == withoutBacklog,
+            "unsent telemetry does not inflate priority countdown");
+        transport.SendTo("Guest Player@World", scheduled, true);
+        transport.Poll();
+        var assembler = new ChatFrameAssembler();
+        Check(assembler.TryAccept("Leader Player@World", transport.Sent.Last().Text, time, out var first), "priority schedule frame accepted");
+        while (first is null)
+        {
+            time += transport.SendIntervalMs;
+            transport.Poll();
+            Check(assembler.TryAccept("Leader Player@World", transport.Sent.Last().Text, time, out first), "remaining priority frame accepted");
+        }
+        Check(first.Type == Kind.Scheduled, "priority scheduling overtakes normal telemetry");
+
+        transport.Reset("Leader Player@World");
+        var names = new[] { "Александр Волков", "Бенедикт Смирнов", "Кристофер Лонгнейм", "Доминик Соколов",
+            "Елизавета Романова", "Фредерик Иванов", "Георгий Николаев", "Гермиона Петрова" };
+        var roster = new Packet { Type = Kind.Group, GroupId = group, LeaderId = "Leader Player@World", Revision = 1,
+            Members = names.Select(n => new Member($"{n}@Twintania", $"{n}@Twintania")).ToArray() };
+        Check(ChatCodec.Encode(roster).Count > 1, "test roster spans multiple paced frames");
+        transport.SendTo("Guest Player@World", roster);
+        transport.Poll();
+        var origin = time;
+        var budget = transport.EstimatePriorityBroadcastMs(scheduled, 3);
+        foreach (var recipient in new[] { "Alpha Player@World", "Bravo Player@World", "Charlie Player@World" })
+            transport.SendTo(recipient, scheduled, true);
+        var recipients = new Dictionary<string, ChatFrameAssembler>();
+        var completed = new HashSet<string>();
+        var index = transport.Sent.Count;
+        while (completed.Count < 3 && time - origin < budget)
+        {
+            time += transport.SendIntervalMs;
+            transport.Poll();
+            foreach (var sent in transport.Sent.Skip(index).ToArray())
+            {
+                if (!recipients.TryGetValue(sent.Target, out var parts)) recipients[sent.Target] = parts = new ChatFrameAssembler();
+                if (parts.TryAccept("Leader Player@World", sent.Text, time, out var packet) && packet?.Type == Kind.Scheduled) completed.Add(sent.Target);
+            }
+            index = transport.Sent.Count;
+        }
+        Check(completed.Count == 3 && time - origin <= budget - 1_000,
+            "broadcast estimate includes partial batch, cooldown and every schedule frame");
     }
     private static Packet Decode(string text, string sender, long now)
     {
