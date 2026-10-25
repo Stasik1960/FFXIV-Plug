@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/EmoteTogether.Client/EmoteTogether.Client.csproj" />
+    <Project Path="src/EmoteTogether.Plugin/EmoteTogether.Plugin.csproj" />
+    <Project Path="src/EmoteTogether.Protocol/EmoteTogether.Protocol.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/EmoteTogether.Tests/EmoteTogether.Tests.csproj" />
+  </Folder>
+</Solution>

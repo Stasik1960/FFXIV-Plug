@@ -1,0 +1,23 @@
+Emote Together 0.2.0 - serverless validation record
+Date: 2026-10-25 (Europe/Oslo)
+
+Environment: Windows x64, .NET SDK 10.0.401, installed Dalamud 15.0.3.9 / API 15.
+dotnet build EmoteTogether.slnx -c Release: PASS, 0 warnings, 0 errors.
+Clock synchronization: PASS, 12 assertions, long chat queue time excluded.
+Chat codec and identities: PASS, 11 scenarios / 390 assertions.
+Paced chat transport: PASS, 15 assertions.
+Serverless group simulations: PASS, 33 assertions with 2, 3 and 8 participants.
+  Real encoded/framed payloads over a simulated chat bus, 1500ms send spacing.
+  Independently skewed clocks, authenticated senders, explicit invitation acceptance.
+  Decline, stale/forged snapshots, guest permissions, all-ready barrier and shared deadline.
+  Initial clock negotiation can finish while preparation waits without cancellation.
+  Cancellation, negative readiness, completed runs, stale schedules, leave and disband.
+  Queued invitation purged on close; joining group closed before roster arrives.
+  Simultaneous accepts survive roster coalescing; all 8 receive a future deadline.
+  Dropped messages, preparation timeout and peer liveness expiration.
+Package contains plugin, client and protocol assemblies, manifest and deps.json.
+No relay, WebSocket/TCP client, URL settings, or server process is included.
+
+No real chat messages were sent during validation.
+Not tested: live /tell delivery/suppression, native animation execution inside FFXIV,
+two actual game clients, visual UI layout in a live game, game anti-spam behavior.

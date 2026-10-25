@@ -1,0 +1,19 @@
+<Project Sdk="Dalamud.NET.Sdk/15.0.0">
+  <PropertyGroup>
+    <Version>0.2.0</Version>
+    <AssemblyName>EmoteTogether</AssemblyName>
+    <RootNamespace>EmoteTogether.Plugin</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Author>EmoteTogether contributors</Author>
+    <RepoUrl>https://github.com/Stasik1960/FFXIV-Plug</RepoUrl>
+    <Name>Emote Together</Name>
+    <Punchline>Группа для синхронного запуска эмоций.</Punchline>
+    <Description>Создайте эмоциональную группу до восьми игроков, пригласите друзей и запустите доступную всем эмоцию после общего обратного отсчёта. Обмен идёт через личные сообщения FFXIV; отдельный сервер и настройка сети не нужны. Всем участникам необходимы плагин и доступный /tell.</Description>
+    <Tags>emote;social;sync</Tags>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../EmoteTogether.Client/EmoteTogether.Client.csproj" />
+  </ItemGroup>
+</Project>
