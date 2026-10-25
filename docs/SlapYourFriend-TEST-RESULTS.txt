@@ -1,15 +1,18 @@
-Slap Your Friend 0.1.0 - validation record
+Slap Your Friend 0.1.1 - validation record
 Author: Ringoto
 Date: 2026-10-26 (Europe/Oslo)
 
 Environment: Windows x64, .NET SDK 10.0.401, Dalamud 15.0.3.9 / API15.
 Release build: PASS, 0 warnings, 0 errors.
-Slap core: PASS, 8 scenarios / 63 assertions.
+Slap core: PASS, 12 scenarios / 128 assertions.
   Initial approach, standing nearby, individual 1-60 minute repeat timers, elapsed-time edits.
   Leave/re-enter, missing objects, pause/resume and removed/re-added identities keep timer history.
   Distance jitter, closest eligible player, 5-second global success spacing, no queued stale action.
   Invalid/duplicate identities, case/NFC normalization and same-name different-world isolation.
   Entity ID reuse, stale execution tokens, failed-native backoff and monotonic clock handling.
+  500ms stationary gate, running/walking/vertical motion, accumulated small steps and native movement.
+  Position jitter, missing/nonfinite positions and clock rollback require a fresh stationary window.
+  Resetting movement tracking does not reset a player's minute interval.
 Existing Emote Together suites: PASS, 625 assertions.
 
 Integration reviewed:
@@ -17,21 +20,27 @@ Integration reviewed:
   Rules are immutable snapshots; configuration edits invalidate an already selected action.
   Current object/identity/address, targetability, life state and 3D distance rechecked before use.
   Only the local character executes /slap, using an explicit PlayEmoteOption.TargetId.
-  Manual hard/soft target is not changed. DisableLogMessage=true avoids emote chat text.
+  Manual hard/soft target is not changed. DisableLogMessage=false enables standard emote chat text.
   Emote ID resolved from English game command data, independent of display language.
-  Combat, zone transitions, dialogues, mounted states, GPose/PvP and existing emotes block use.
+  Combat, zone transitions, dialogues, mounted states and GPose/PvP block use.
+  Existing emotes no longer block eligibility. Native SetMode(Normal,0) ends only loop emote modes
+  after a valid stationary target is confirmed; native permission checks then precede /slap.
+  AgentMap.IsPlayerMoving and sampled 3D position jointly gate the action, with a fresh native
+  movement check immediately before target/animation work. Timers start only on accepted execution.
   Zone transitions and pause preserve timers; local session/character changes reset them.
   Friend list reads loaded InfoProxyFriendList entries, capped at200, skipping pending requests.
-  Full character name + HomeWorld required; plain name resolves a unique cached friend or own world.
+  Full character name + HomeWorld identifies a player. Plain name resolves a unique cached friend
+  or visible character before own-world fallback; a nearby wrong-world match gets an explicit status.
   Native calls stay on Framework.Update; dispose removes callbacks without pending execution.
 
 Defaults: Enabled=true with an initially empty list; Radius=2m; IntervalMinutes=1 per player;
 ShowBackground=true. Radius adjustable1-4m, per-player interval1-60min.
 Package: SlapYourFriend.dll/json/deps.json, SlapYourFriend.Core.dll, Assets/friendly-slap.jpg.
-Metadata: Author=Ringoto, AssemblyVersion=0.1.0.0, DalamudApiLevel=15.
+Metadata: Author=Ringoto, AssemblyVersion=0.1.1.0, DalamudApiLevel=15.
 Runtime artwork: 1536x1024 JPEG, 223467 bytes; bundled with the plugin.
-No network transport, tell control messages, game chat command text, relay or external server.
+No network transport, tell control messages, synthetic chat command text, relay or external server.
 Two-entry catalog packaging preserves the existing EmoteTogether0.4.0 entry/package.
 
+Live log confirms version0.1.0 loaded normally; its explicit IsEmoting gate caused the waiting status.
 No native animation or real chat/emote was executed during automated validation.
 Live FFXIV window rendering, friend-list cache loading and targeted native slap need in-game testing.

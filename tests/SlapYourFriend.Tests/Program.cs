@@ -1,3 +1,4 @@
+using System.Numerics;
 using SlapYourFriend.Core;
 
 namespace SlapYourFriend.Tests;
@@ -19,7 +20,11 @@ internal static class Program
             NativeFailureBackoff();
             IdentityAndEntityReuse();
             InvalidInputsAndClock();
-            Console.WriteLine($"PASS: Slap Your Friend proximity and repeat timers (8 scenarios, {assertions} assertions). No game calls or chat messages sent.");
+            MovementRequiresSettle();
+            MovementAccumulatedAnchor();
+            MovementInvalidSamplesAndNativeFlag();
+            MovementRollbackAndTimers();
+            Console.WriteLine($"PASS: Slap Your Friend proximity, repeat timers and stationary gate (12 scenarios, {assertions} assertions). No game calls or chat messages sent.");
             return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }
@@ -146,6 +151,75 @@ internal static class Program
         Check(gate.Update([Near(Alice, 1, 1)], rules, 9_000, true) is null, "backward clock cannot bypass timers");
         Check(gate.Update([Near(Alice, 1, 1)], rules, 69_999, true) is null, "timer still intact after backward clock");
         Expect(gate.Update([Near(Alice, 1, 1)], rules, 70_000, true), Alice, "normal time resumes");
+    }
+
+    private static void MovementRequiresSettle()
+    {
+        var movement = new MovementGate();
+        Check(!movement.Update(Vector3.Zero, 0), "first position requires settling");
+        Check(!movement.Update(Vector3.Zero, 499), "not stationary before 500ms");
+        Check(movement.Update(Vector3.Zero, 500) && movement.IsStationary, "stable position permits emote after 500ms");
+        Check(!movement.Update(new Vector3(0.5f, 0, 0), 600), "running immediately blocks emote");
+        Check(!movement.Update(new Vector3(1, 0, 0), 800), "continued running restarts stable window");
+        Check(!movement.Update(new Vector3(1, 0, 0), 1_299), "new stop has its own 500ms settle");
+        Check(movement.Update(new Vector3(1, 0, 0), 1_300), "stopped runner becomes eligible");
+        Check(!movement.Update(new Vector3(1, 0.1f, 0), 1_400), "vertical movement also blocks");
+    }
+
+    private static void MovementAccumulatedAnchor()
+    {
+        var movement = new MovementGate();
+        movement.Update(Vector3.Zero, 0);
+        for (var sample = 1; sample <= 30; sample++)
+            Check(!movement.Update(new Vector3(sample * 0.01f, 0, 0), sample * 100),
+                "small movement steps accumulate instead of being mistaken for standing still");
+        var stop = new Vector3(30 * 0.01f, 0, 0);
+        Check(movement.Update(stop, 3_600), "slow runner can settle after stopping");
+        movement.Reset();
+        movement.Update(Vector3.Zero, 4_000);
+        foreach (var (time, offset) in new[] { (4_100L, 0.004f), (4_200L, -0.004f), (4_300L, 0.006f), (4_400L, -0.003f) })
+            Check(!movement.Update(new Vector3(offset, 0, 0), time), "minor standing jitter stays inside stable window");
+        Check(movement.Update(new Vector3(0.005f, 0, 0), 4_500), "standing jitter does not block forever");
+    }
+
+    private static void MovementInvalidSamplesAndNativeFlag()
+    {
+        var movement = new MovementGate();
+        movement.Update(Vector3.Zero, 0);
+        Check(movement.Update(Vector3.Zero, 500), "initially stationary");
+        Check(!movement.Update(null, 600) && !movement.IsStationary, "loading clears stationary state");
+        Check(!movement.Update(Vector3.Zero, 700), "return from loading requires a fresh window");
+        Check(movement.Update(Vector3.Zero, 1_200), "loaded and settled");
+        foreach (var invalid in new[] { new Vector3(float.NaN, 0, 0), new Vector3(0, float.PositiveInfinity, 0), new Vector3(0, 0, float.NegativeInfinity) })
+            Check(!movement.Update(invalid, 1_300), "nonfinite coordinates cannot permit an emote");
+        Check(!movement.Update(Vector3.Zero, 1_400, true), "native moving flag blocks unchanged position");
+        Check(!movement.Update(Vector3.Zero, 1_900, true), "native movement never settles");
+        Check(!movement.Update(Vector3.Zero, 2_000), "release of native movement starts a fresh window");
+        Check(!movement.Update(Vector3.Zero, 2_499), "release window not prematurely ready");
+        Check(movement.Update(Vector3.Zero, 2_500), "native stop settles normally");
+    }
+
+    private static void MovementRollbackAndTimers()
+    {
+        var movement = new MovementGate();
+        movement.Update(Vector3.Zero, 500);
+        Check(movement.Update(Vector3.Zero, 1_000), "ready before clock rollback");
+        Check(!movement.Update(Vector3.Zero, 900), "clock rollback cannot retain stationary permission");
+        Check(!movement.Update(Vector3.Zero, 1_399), "rollback requires a new complete window");
+        Check(movement.Update(Vector3.Zero, 1_400), "new monotonic window restores eligibility");
+        Check(!movement.Update(Vector3.Zero, -1), "invalid negative clock blocks");
+
+        var trigger = new ProximityTrigger();
+        var nearby = new[] { Near(Alice, 1, 1) }; var rules = new[] { new PlayerRule(Alice) };
+        movement.Update(Vector3.Zero, 0);
+        Check(trigger.Update(nearby, rules, 0, movement.IsStationary) is null, "running or unsettled approach cannot select an emote");
+        var first = Expect(trigger.Update(nearby, rules, 500, movement.Update(Vector3.Zero, 500)), Alice, "first stop permits approach");
+        trigger.ReportExecution(first, true, 500);
+        movement.Reset();
+        movement.Update(Vector3.One, 30_000);
+        Check(trigger.Update(nearby, rules, 30_500, movement.Update(Vector3.One, 30_500)) is null,
+            "movement reset cannot clear an individual repeat timer");
+        Expect(trigger.Update(nearby, rules, 60_500, movement.Update(Vector3.One, 60_500)), Alice, "repeat due after stop and minute timer");
     }
 
     private static NearbyPlayer Near(string identity, ulong entity, float distance) => new(identity, entity, distance);

@@ -5,7 +5,7 @@
 | Плагин | Что делает | Открыть окно |
 | --- | --- | --- |
 | **[Emote Together](docs/EmoteTogether.md)** · 0.4.0 | Эмоциональная группа до восьми игроков, приглашения, синхронный запуск эмоций и передача лидерства. | `/emotegroup` |
-| **[Slap Your Friend](docs/SlapYourFriend.md)** · 0.1.0 | Автоматическая пощёчина выбранным игрокам при сближении; индивидуальный интервал повторения. | `/slapfriend` |
+| **[Slap Your Friend](docs/SlapYourFriend.md)** · 0.1.1 | Автоматическая пощёчина выбранным игрокам после остановки рядом; индивидуальный интервал повторения. | `/slapfriend` |
 
 ## Установка
 
@@ -36,7 +36,7 @@ https://raw.githubusercontent.com/Stasik1960/FFXIV-Plug/main/repo.json
 
 ```powershell
 ./scripts/package-repository.ps1 -ReleaseTag v0.4.0
-./scripts/package-slap.ps1 -ReleaseTag v0.1.0
+./scripts/package-slap.ps1 -ReleaseTag v0.1.1
 ```
 
 Каждый скрипт формирует собственный ZIP и SHA256 в `plugins/<InternalName>/<version>/`, проверяет архив и обновляет только запись своего плагина в `repo.json`. Записи остальных плагинов сохраняются. Исходники, новый ZIP, контрольную сумму и индекс следует публиковать одним коммитом. Для уже опубликованной версии используйте её существующий архив; изменения выпускайте под новым номером.

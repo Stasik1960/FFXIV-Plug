@@ -3,6 +3,7 @@ using Dalamud.Game;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Plugin.Services;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
@@ -19,6 +20,15 @@ internal sealed unsafe class GameSlap
     private readonly IObjectTable objects;
     private readonly ICondition conditions;
     private readonly ushort slapId;
+
+    public bool IsMoving
+    {
+        get
+        {
+            var map = AgentMap.Instance();
+            return map == null || map->IsPlayerMoving;
+        }
+    }
 
     private static readonly ConditionFlag[] BlockedConditions =
     [
@@ -52,8 +62,6 @@ internal sealed unsafe class GameSlap
             return Fail("Ожидаем, пока персонаж сможет выполнить эмоцию.", out reason);
         if (clientState.IsGPosing || clientState.IsPvP || BlockedConditions.Any(flag => conditions[flag]))
             return Fail("Пауза: бой, переход, диалог или другое занятие.", out reason);
-        if (((NativeCharacter*)player.Address)->EmoteController.IsEmoting())
-            return Fail("Ожидаем завершения текущей эмоции.", out reason);
         if (slapId == 0)
             return Fail("Не удалось найти эмоцию /slap в данных игры.", out reason);
         var ui = UIState.Instance();
@@ -63,8 +71,6 @@ internal sealed unsafe class GameSlap
             return Fail("Система эмоций ещё не готова.", out reason);
         if (!ui->IsEmoteUnlocked(slapId))
             return Fail("Эмоция /slap недоступна персонажу.", out reason);
-        if (!agent->CanUseEmote(slapId) || !manager->CanExecuteEmote(slapId))
-            return Fail("Ожидаем, пока игра разрешит эмоцию.", out reason);
         reason = string.Empty;
         return true;
     }
@@ -72,6 +78,7 @@ internal sealed unsafe class GameSlap
     public bool Play(IPlayerCharacter target, float maxDistance, out string reason)
     {
         if (!CanPlay(out reason)) return false;
+        if (IsMoving) return Fail("Остановитесь перед пощёчиной.", out reason);
         var player = objects.LocalPlayer!;
         if (!float.IsFinite(maxDistance) || maxDistance is < 1 or > 4 || !target.IsValid() ||
             !TryIdentity(target, out var identity) || objects.SearchById(target.GameObjectId) is not IPlayerCharacter live ||
@@ -84,13 +91,22 @@ internal sealed unsafe class GameSlap
         if (!float.IsFinite(distanceSquared) || distanceSquared > maxDistance * maxDistance)
             return Fail("Игрок уже отошёл слишком далеко.", out reason);
 
+        // Only a valid, nearby target may replace an existing emote. Leave every other mode alone.
+        var character = (NativeCharacter*)player.Address;
+        if (character->Mode is CharacterModes.EmoteLoop or CharacterModes.InPositionLoop)
+            character->SetMode(CharacterModes.Normal, 0);
+        var agent = AgentEmote.Instance();
+        var manager = EmoteManager.Instance();
+        if (agent == null || manager == null || !agent->CanUseEmote(slapId) || !manager->CanExecuteEmote(slapId))
+            return Fail("Ожидаем, пока игра разрешит эмоцию.", out reason);
+
         var options = new EmoteController.PlayEmoteOption
         {
             VirtualTable = EmoteController.PlayEmoteOption.StaticVirtualTablePointer,
             TargetId = live.GameObjectId,
-            DisableLogMessage = true,
+            DisableLogMessage = false,
         };
-        if (EmoteManager.Instance()->ExecuteEmote(slapId, &options))
+        if (manager->ExecuteEmote(slapId, &options))
         {
             reason = string.Empty;
             return true;

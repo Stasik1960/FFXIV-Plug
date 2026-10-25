@@ -35,6 +35,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly MainWindow window;
     private readonly GameSlap slap;
     private readonly ProximityTrigger trigger = new();
+    private readonly MovementGate movement = new();
     private readonly long started = Stopwatch.GetTimestamp();
     private readonly Dictionary<string, string> worlds;
     private volatile PlayerRule[] rules = [];
@@ -70,7 +71,9 @@ public sealed class Plugin : IDalamudPlugin
         var value = name.Trim();
         if (!value.Contains('@'))
         {
-            var matches = friends.Where(n => string.Equals(n.Split('@')[0], value, StringComparison.OrdinalIgnoreCase)).ToArray();
+            var matches = friends.Concat(Objects.OfType<IPlayerCharacter>().Select(IdentityOf).OfType<string>())
+                .Where(n => string.Equals(n.Split('@')[0], value, StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
             if (matches.Length > 1) { Status = "Уточните домашний мир: Имя Фамилия@Мир."; return false; }
             if (matches.Length == 1) value = matches[0];
             else if (PlayerState.IsLoaded && PlayerState.HomeWorld.IsValid) value += "@" + PlayerState.HomeWorld.Value.Name.ExtractText();
@@ -146,6 +149,7 @@ public sealed class Plugin : IDalamudPlugin
             if (!ClientState.IsLoggedIn)
             {
                 if (activeIdentity is not null) trigger.Reset();
+                movement.Reset();
                 activeIdentity = null;
                 friends = [];
                 Status = "Войдите в игру для автопощёчины.";
@@ -155,12 +159,14 @@ public sealed class Plugin : IDalamudPlugin
             if (identity is null || !PlayerState.IsLoaded)
             {
                 trigger.Update([], snapshot, now, false, Configuration.Radius);
+                movement.Update(null, now);
                 Status = "Ждём загрузку персонажа…";
                 return;
             }
             if (!string.Equals(identity, activeIdentity, StringComparison.OrdinalIgnoreCase))
             {
                 trigger.Reset();
+                movement.Reset();
                 activeIdentity = identity;
                 friends = [];
                 nextFriends = 0;
@@ -175,7 +181,9 @@ public sealed class Plugin : IDalamudPlugin
                     if (!friendReadError) { friendReadError = true; Log.Warning(error, "Не удалось прочитать список друзей."); }
                 }
             }
+            var stationary = movement.Update(local!.Position, now, slap.IsMoving);
             var visible = new List<NearbyPlayer>();
+            string? wrongWorldNearby = null;
             if (snapshot.Length != 0)
             {
                 var allowed = snapshot.Select(p => p.Identity).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -183,12 +191,19 @@ public sealed class Plugin : IDalamudPlugin
                 {
                     if (obj is not IPlayerCharacter player || player.GameObjectId == local!.GameObjectId || player.IsDead || !player.IsTargetable) continue;
                     var targetIdentity = IdentityOf(player);
-                    if (targetIdentity is null || !allowed.Contains(targetIdentity)) continue;
-                    visible.Add(new NearbyPlayer(targetIdentity, player.GameObjectId, Vector3.Distance(local.Position, player.Position)));
+                    if (targetIdentity is null) continue;
+                    var distance = Vector3.Distance(local.Position, player.Position);
+                    if (!allowed.Contains(targetIdentity))
+                    {
+                        if (distance <= Configuration.Radius && snapshot.Any(p => string.Equals(p.Identity.Split('@')[0],
+                                targetIdentity.Split('@')[0], StringComparison.OrdinalIgnoreCase))) wrongWorldNearby = targetIdentity;
+                        continue;
+                    }
+                    visible.Add(new NearbyPlayer(targetIdentity, player.GameObjectId, distance));
                 }
             }
             var reason = string.Empty;
-            var canAct = Configuration.Enabled && snapshot.Length != 0 && slap.CanPlay(out reason);
+            var canAct = Configuration.Enabled && snapshot.Length != 0 && stationary && slap.CanPlay(out reason);
             var candidate = trigger.Update(visible, snapshot, now, canAct, Configuration.Radius);
             if (candidate is { } selected)
             {
@@ -204,8 +219,14 @@ public sealed class Plugin : IDalamudPlugin
             }
             if (!Configuration.Enabled) Status = "Автопощёчина на паузе. Таймеры сохраняются.";
             else if (snapshot.Length == 0) Status = "Добавьте друзей или имена персонажей.";
+            else if (!stationary) Status = "Остановитесь рядом с выбранным игроком. Ждём полсекунды неподвижности.";
             else if (!canAct) Status = reason;
-            else if (now - lastAction >= 5_000) Status = $"Ждём выбранных игроков в радиусе {Configuration.Radius:F1} м. Повтор — по их таймерам.";
+            else if (now - lastAction >= 5_000)
+            {
+                if (visible.Any(p => p.Distance <= Configuration.Radius)) Status = "Игрок рядом. Ожидаем его интервал повтора.";
+                else if (wrongWorldNearby is not null) Status = $"Рядом {wrongWorldNearby}, а в списке другой мир. Выберите игрока и нажмите «Добавить цель».";
+                else Status = $"Ждём выбранных игроков в радиусе {Configuration.Radius:F1} м. Повтор — по их таймерам.";
+            }
         }
         catch (Exception error)
         {
