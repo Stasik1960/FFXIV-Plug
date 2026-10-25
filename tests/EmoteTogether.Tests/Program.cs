@@ -10,9 +10,11 @@ internal static class Program
         {
             ClockTests();
             ChatCodecTests.Run();
+            ControlFrameClassifierTests.Run();
             TransportTests.Run();
             ServerlessTests.Run();
             LeadershipTests.Run();
+            PresenceTests.Run();
             Console.WriteLine("PASS: all serverless checks completed. No real game chat was sent.");
             return 0;
         }
@@ -31,7 +33,7 @@ internal static class Program
         Check(!sync.Observe(1_000, 2_000, 2_000, 999), "client time backwards");
         Check(!sync.Observe(1_000, 2_000, 2_000, 7_001), "excessive RTT");
         Check(!sync.Observe(1_000, long.MinValue, long.MaxValue, 1_100), "overflow rejected");
-        Check(!sync.IsReady(161_020), "stale synchronization expires");
+        Check(!sync.IsReady(641_020), "stale synchronization expires");
         sync.Reset();
         Check(!sync.IsReady(41_020) && sync.OffsetMs == 0, "reset");
         Console.WriteLine("PASS: clock synchronization (12 assertions)");

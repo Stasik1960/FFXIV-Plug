@@ -6,7 +6,7 @@ namespace EmoteTogether.Protocol;
 // Bounded chat wire protocol; only game-authenticated senders are authoritative.
 public sealed record Packet
 {
-    public const int Version = 3;
+    public const int Version = 4;
     public const int MaxMessageBytes = 8_192;
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -35,6 +35,7 @@ public sealed record Packet
     [JsonPropertyName("c")] public long ServerSendTime { get; init; }
     [JsonPropertyName("d")] public long StartAtUnixMs { get; init; }
     [JsonPropertyName("k")] public int CountdownSeconds { get; init; }
+    [JsonPropertyName("j")] public string? NewGroupId { get; init; }
 }
 
 public sealed record Member([property: JsonPropertyName("i")] string Id, [property: JsonPropertyName("n")] string Name);

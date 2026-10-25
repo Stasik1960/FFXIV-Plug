@@ -17,7 +17,8 @@ internal static class LeadershipTests
         CommitLossFailsClosed();
         AcknowledgementRetry();
         FullGroupTransfer();
-        Console.WriteLine($"PASS: leadership transfer (7 scenarios, {assertions} assertions)");
+        foreach (var phase in new[] { 3_000L, 6_000L, 9_000L, 11_800L }) FullGroupTransfer(phase);
+        Console.WriteLine($"PASS: leadership transfer (11 scenarios, {assertions} assertions)");
     }
 
     private static void TransferAndTransferAgain()
@@ -103,11 +104,13 @@ internal static class LeadershipTests
         host.Client.CreateGroup();
         scene.Join(host, next);
         scene.WaitForClocks();
+        var previousGroup = host.Client.GroupId;
         scene.Dropped.Add(next.Name);
         host.Client.TransferLeadership(next.Name);
         scene.Advance(125_000);
         Check(host.Client.IsLeader && !host.Client.IsTransferringLeadership, "unanswered offer retains previous leader");
-        Check(!next.Client.IsLeader && scene.MaxLeaders <= 1, "missing offer never promotes candidate");
+        Check(next.Client.IsLeader && next.Client.GroupId != previousGroup && next.Client.GroupId != host.Client.GroupId,
+            "missing offer cannot promote candidate inside the previous leader's group");
         var offers = scene.SentPackets.Count(p => p.Packet.Type == LeadershipKinds.Offer);
         Check(offers <= 3, "offer retries are bounded");
     }
@@ -142,13 +145,16 @@ internal static class LeadershipTests
         host.Client.CreateGroup();
         scene.Join(host, next);
         scene.WaitForClocks();
+        var previousGroup = host.Client.GroupId;
         host.Client.TransferLeadership(next.Name);
         scene.Until(() => !host.Client.IsLeader && host.Client.IsTransferringLeadership, "origin demotes before commit delivery");
         scene.Dropped.Add(next.Name);
         scene.Advance(125_000);
-        Check(host.Client.GroupId == null && !next.Client.IsLeader, "uncertain committed transfer fails closed without rollback election");
-        scene.Advance(190_000);
-        Check(next.Client.GroupId == null && scene.MaxLeaders <= 1, "uncommitted candidate eventually closes stale group");
+        Check(host.Client.IsLeader && next.Client.IsLeader && host.Client.GroupId != next.Client.GroupId,
+            "lost committed transfer isolates both members into separate recovered groups");
+        Check(host.Client.GroupId != previousGroup && next.Client.GroupId != previousGroup &&
+            host.Client.Members.Length == 1 && next.Client.Members.Length == 1,
+            "uncertain committed transfer cannot restore stale group authority");
     }
 
     private static void AcknowledgementRetry()
@@ -163,14 +169,14 @@ internal static class LeadershipTests
         scene.Until(() => !host.Client.IsLeader && host.Client.IsTransferringLeadership, "commit begins");
         scene.DroppedRoutes.Add((next.Name, host.Name));
         scene.Until(() => next.Client.IsLeader && next.Client.IsTransferringLeadership, "candidate committed while ack route lost");
-        scene.Advance(20_000);
+        scene.Advance(10_000);
         Check(next.Client.IsTransferringLeadership, "candidate stays blocked while acknowledgements are lost");
         scene.DroppedRoutes.Clear();
         scene.WaitForLeader(next.Name);
         Check(next.Client.IsLeader && !host.Client.IsLeader, "bounded commit retry recovers a lost acknowledgement");
     }
 
-    private static void FullGroupTransfer()
+    private static void FullGroupTransfer(long phase = 0)
     {
         using var scene = new Scene();
         var host = scene.Add("Host Player@World", 300_000);
@@ -184,13 +190,17 @@ internal static class LeadershipTests
         }
         scene.Until(() => scene.Nodes.All(n => n.Client.Members.Length == 8), "full roster before transfer", 180_000);
         scene.WaitForClocks();
+        scene.Advance(phase);
+        var group = host.Client.GroupId;
         var before = scene.Now;
         host.Client.TransferLeadership(next!.Name);
         scene.WaitForLeader(next.Name, 115_000);
         Check(scene.Now - before < 120_000, "paced fragmented eight-player transfer fits lifetime");
-        Check(scene.Nodes.All(n => n.Client.Members.Length == 8) && scene.MaxLeaders <= 1, "eight-player transfer preserves roster and exclusive leadership");
+        Check(scene.Nodes.All(n => n.Client.Members.Length == 8 && n.Client.GroupId == group) && scene.MaxLeaders <= 1,
+            $"eight-player transfer preserves roster and exclusive leadership at heartbeat phase {phase}");
         scene.WaitForClocks();
-        Check(scene.Nodes.All(n => Math.Abs(n.Client.LeaderNowUnixMs - next.Client.LeaderNowUnixMs) <= 100), "full group resynchronizes to promoted leader");
+        Check(scene.Nodes.All(n => Math.Abs(n.Client.LeaderNowUnixMs - next.Client.LeaderNowUnixMs) <= 100),
+            $"full group resynchronizes to promoted leader at phase {phase}: " + string.Join("; ",scene.Nodes.Select(n=>$"{n.Name} diff={n.Client.LeaderNowUnixMs-next.Client.LeaderNowUnixMs} leader={n.Client.LeaderId} count={n.Client.Members.Length} {n.Client.Status}")));
         foreach (var node in scene.Nodes)
         {
             var times = scene.SentFrames.Where(f => f.Sender == node.Name).Select(f => f.At).ToArray();
@@ -208,7 +218,7 @@ internal static class LeadershipTests
         public HashSet<string> Dropped { get; } = new(StringComparer.OrdinalIgnoreCase);
         public HashSet<(string Sender, string Recipient)> DroppedRoutes { get; } = [];
         public List<(string Sender, string Text, long At)> SentFrames { get; } = [];
-        public List<(string Sender, Packet Packet)> SentPackets { get; } = [];
+        public List<(string Sender, string Recipient, Packet Packet, long At)> SentPackets { get; } = [];
         public int MaxLeaders { get; private set; }
         private readonly List<(string Sender, string Recipient, string Text, long At)> network = [];
         private readonly Dictionary<string, ChatFrameAssembler> inspectors = new(StringComparer.OrdinalIgnoreCase);
@@ -231,7 +241,11 @@ internal static class LeadershipTests
             guest.Client.RespondInvite(true);
             Until(() => guest.Client.GroupId == host.Client.GroupId && guest.Client.Members.Length >= 2, $"join {guest.Name}", 90_000);
         }
-        public void WaitForClocks() => Until(() => Nodes.Where(n => n.Client.GroupId != null).All(n => n.Client.ClockReady), "leadership clock synchronization", 150_000);
+        public void WaitForClocks()
+        {
+            var joined = Nodes.Where(n => n.Client.GroupId != null).ToArray();
+            Until(() => joined.All(n => n.Client.GroupId != null && n.Client.ClockReady), "leadership clock synchronization", 150_000);
+        }
         public void WaitForLeader(string leader, long timeout = 90_000) =>
             Until(() => Nodes.Where(n => n.Client.GroupId != null).All(n => n.Client.LeaderId == leader && !n.Client.IsTransferringLeadership), "settled leader " + leader, timeout);
         public void Advance(long milliseconds)
@@ -263,7 +277,7 @@ internal static class LeadershipTests
             SentFrames.Add((sender, text, Now));
             var key = sender + ">" + recipient;
             if (!inspectors.TryGetValue(key, out var inspector)) inspectors[key] = inspector = new ChatFrameAssembler();
-            if (inspector.TryAccept(sender, text, Now, out var packet) && packet != null) SentPackets.Add((sender, packet));
+            if (inspector.TryAccept(sender, text, Now, out var packet) && packet != null) SentPackets.Add((sender, recipient, packet, Now));
             if (!Dropped.Contains(sender) && !Dropped.Contains(recipient) && !DroppedRoutes.Contains((sender, recipient)))
                 network.Add((sender, recipient, text, Now + 100));
         }

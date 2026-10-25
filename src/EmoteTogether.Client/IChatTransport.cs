@@ -16,6 +16,7 @@ public interface IChatTransport : IDisposable
     int EstimatePriorityBroadcastMs(Packet packet, int recipients);
     void ForgetRun(string runId);
     void ForgetGroup(string groupId);
+    void ForgetRecipient(string recipient, string groupId);
     void Poll();
     void Reset(string? identity);
 }

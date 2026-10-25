@@ -3,7 +3,7 @@ param(
     [ValidatePattern('^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9_.-]+$')]
     [string] $Repository = 'Stasik1960/FFXIV-Plug',
     [ValidatePattern('^v[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?$')]
-    [string] $ReleaseTag = 'v0.3.0',
+    [string] $ReleaseTag = 'v0.4.0',
     [ValidatePattern('^[A-Za-z0-9._/-]+$')]
     [string] $BinaryRef = 'main',
     [string] $OutputDirectory
@@ -106,7 +106,7 @@ $entry.DownloadLinkTesting = $releaseUrl
 $entry.IsHide = $false
 $entry.IsTestingExclusive = $false
 $entry.LastUpdate = [System.DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-$entry.Changelog = 'Новый тёмный интерфейс с отключаемым фоном тигра. Выбор задержки старта: по умолчанию 3 секунды для пары, минимум большой группы учитывает доставку /tell. Передача лидерства участнику. Всем участникам требуется версия 0.3.0 (протокол ET3).'
+$entry.Changelog = 'Приглашение цели одним нажатием. Сворачивание до заголовка и перемещаемая мини-панель с тигром и быстрым запуском. Служебные сообщения скрываются до обработки Aetherphone; постоянная синхронизация часов убрана. Таймаут участника 30 секунд, автоматическая смена пропавшего лидера. Автор: Ringoto. Всем участникам требуется версия 0.4.0 (протокол ET4).'
 $indexPath = Join-Path $projectRoot 'repo.json'
 $indexJson = ConvertTo-Json -InputObject @($entry) -Depth 20
 [System.IO.File]::WriteAllText($indexPath, $indexJson + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))

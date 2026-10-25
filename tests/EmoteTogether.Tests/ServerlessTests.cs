@@ -170,8 +170,9 @@ internal static class ServerlessTests
         host.Client.Start(22);
         scene.Until(() => host.Client.PendingRunId == null, "missing ready times out", 100_000);
         Check(host.Schedules.Count == 1, "dropped preparation never schedules another run");
-        scene.Advance(200_000);
-        Check(host.Client.Members.Length == 1 && guest.Client.GroupId == null, "partition expires membership and local group");
+        scene.Advance(300_000);
+        Check(host.Client.Members.Length == 1 && guest.Client.IsLeader && guest.Client.Members.Length == 1 && guest.Client.GroupId != host.Client.GroupId,
+            "partition expires old membership and isolates recovered singleton in a fresh group");
     }
 
     private static void FirstStartWaitsForClocks()

@@ -45,6 +45,7 @@ public sealed partial class GroupClient
     private bool HandleLeadership(string sender, Packet packet, long receivedAt)
     {
         if (packet.Type is not (LeadershipKinds.Offer or LeadershipKinds.Ready or LeadershipKinds.Changed or LeadershipKinds.Ack or LeadershipKinds.Settled)) return false;
+        if (recovery is not null) return true;
         if (GroupId is null || packet.GroupId != GroupId || !ValidId(packet.Nonce) || packet.LeaderId is not { } target ||
             Normalize(target) is null || !Members.Any(m => Same(m.Id, sender)) || !Members.Any(m => Same(m.Id, target))) return true;
 
@@ -72,7 +73,7 @@ public sealed partial class GroupClient
     private void ReceiveLeadershipOffer(string sender, Packet packet, long receivedAt)
     {
         if (!Same(sender, LeaderId) || !Same(packet.LeaderId, identity) || packet.Revision != revision + 1 ||
-            PendingRunId is not null || activeRun is not null || outgoingLeadership is not null || !SameRoster(packet.Members, Members)) return;
+            PendingRunId is not null || activeRun is not null || outgoingLeadership is not null || !MatchesPacketRoster(packet)) return;
         if (incomingLeadership is { } existing)
         {
             if (!Matches(existing.Change, sender, packet) || existing.Committed || now() >= existing.Change.ExpiresAt) return;
@@ -118,7 +119,7 @@ public sealed partial class GroupClient
                 AcknowledgeLeadership(previous, incomingLeadership is null);
             return;
         }
-        if (!Same(sender, LeaderId) || packet.Revision != revision + 1 || !SameRoster(packet.Members, Members) ||
+        if (!Same(sender, LeaderId) || packet.Revision != revision + 1 || !MatchesPacketRoster(packet) ||
             PendingRunId is not null || activeRun is not null || outgoingLeadership is not null) return;
         if (Same(packet.LeaderId, identity) && (incomingLeadership is not { Committed: false } proposal ||
             !Matches(proposal.Change, sender, packet) || now() >= proposal.Change.ExpiresAt)) return;
@@ -140,6 +141,8 @@ public sealed partial class GroupClient
         Members = change.Roster.ToArray();
         synchronization.Reset();
         pings.Clear();
+        clockRequests = 0;
+        clockBurstDeadline = 0;
         nextPing = 0;
         lastLeaderSeen = now();
         memberSeen.Clear();
@@ -184,6 +187,7 @@ public sealed partial class GroupClient
         else
         {
             outgoingLeadership = null;
+            BeginClockBurst();
             Status = $"Лидерство передано: {operation.Change.NewLeader}.";
         }
     }
@@ -193,6 +197,7 @@ public sealed partial class GroupClient
         if (lastLeadershipChange is not { } change || !Matches(change, sender, packet) ||
             revision != change.Revision || !Same(LeaderId, change.NewLeader) || now() >= change.ExpiresAt) return;
         incomingLeadership = null;
+        if (!ClockReady) BeginClockBurst();
         Status = IsLeader ? "Вы стали лидером эмоциональной группы." : $"Лидер группы: {change.NewLeader}.";
         AcknowledgeLeadership(change, true);
     }
@@ -235,7 +240,7 @@ public sealed partial class GroupClient
             var kind = operation.Phase == LeadershipPhase.Commit ? LeadershipKinds.Changed : LeadershipKinds.Settled;
             foreach (var member in operation.Change.Roster)
                 if (!Same(member.Id, identity) && !operation.Acknowledged.Contains(member.Id) &&
-                    !Send(member.Id, LeadershipPacket(kind, operation.Change, operation.Phase == LeadershipPhase.Commit), true)) return;
+                    !Send(member.Id, LeadershipPacket(kind, operation.Change, false), true)) return;
         }
     }
 
@@ -248,11 +253,14 @@ public sealed partial class GroupClient
         lastLeadershipAcknowledgement = 0;
     }
 
-    private static Packet LeadershipPacket(string kind, LeadershipChange change, bool includeRoster = true) => new()
+    // The authenticated old leader and expected next revision identify the already validated
+    // local roster. Sending it again would turn each commit into several paced chat frames.
+    private static Packet LeadershipPacket(string kind, LeadershipChange change, bool includeRoster = false) => new()
     {
         Type = kind, GroupId = change.Group, Nonce = change.Id, LeaderId = change.NewLeader,
         FromName = change.OldLeader, Revision = change.Revision, Members = includeRoster ? change.Roster : null,
     };
+    private bool MatchesPacketRoster(Packet packet) => packet.Members is null || SameRoster(packet.Members, Members);
     private static bool Matches(LeadershipChange change, string sender, Packet packet) =>
         Same(sender, change.OldLeader) && packet.GroupId == change.Group && packet.Nonce == change.Id &&
         packet.Revision == change.Revision && Same(packet.LeaderId, change.NewLeader) && Same(packet.FromName, change.OldLeader);

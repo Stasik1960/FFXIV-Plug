@@ -5,7 +5,7 @@ namespace EmoteTogether.Protocol;
 
 public static class ChatCodec
 {
-    public const string Prefix = "[ET3]";
+    public const string Prefix = "[ET4]";
     public const int MaxFrameLength = 240;
     public const int MaxFragments = 8;
     private const int ChunkLength = 196;
@@ -16,6 +16,8 @@ public static class ChatCodec
         Kind.GroupClosed, Kind.Start, Kind.Prepare, Kind.Ready, Kind.Scheduled,
         Kind.Cancel, Kind.Cancelled, Kind.Error, Kind.Leave,
         LeadershipKinds.Offer, LeadershipKinds.Ready, LeadershipKinds.Changed, LeadershipKinds.Ack, LeadershipKinds.Settled,
+        PresenceKinds.Pulse, PresenceKinds.Departed, PresenceKinds.RecoveryProbe, PresenceKinds.RecoveryVote,
+        PresenceKinds.RecoveryCommit, PresenceKinds.RecoveryAck,
     ];
 
     public static IReadOnlyList<string> Encode(Packet packet)
@@ -83,7 +85,7 @@ public static class ChatCodec
 
     private static bool IsValid(Packet packet) => packet.ProtocolVersion == Packet.Version &&
         packet.Type != null && KnownKinds.Contains(packet.Type) &&
-        Short(packet.Name, 96) && Short(packet.MemberId, 96) && Short(packet.GroupId, 64) &&
+        Short(packet.Name, 96) && Short(packet.MemberId, 96) && Short(packet.GroupId, 64) && Short(packet.NewGroupId, 64) &&
         Short(packet.LeaderId, 96) && Short(packet.TargetName, 96) && Short(packet.InviteId, 64) &&
         Short(packet.FromName, 96) && Short(packet.RunId, 64) && Short(packet.Reason, 160) && Short(packet.Nonce, 64) &&
         (packet.Members == null || packet.Members.Length <= 8 && packet.Members.All(m => m != null && Short(m.Id, 96) && Short(m.Name, 96)));

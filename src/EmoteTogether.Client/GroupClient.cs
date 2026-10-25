@@ -9,7 +9,7 @@ public sealed partial class GroupClient : IDisposable
 {
     public const int MaxMembers = 8;
     public const long InviteLifetimeMs = 90_000;
-    public const long PeerLifetimeMs = 180_000;
+    public const long PeerLifetimeMs = 30_000;
     private static readonly StringComparer Names = StringComparer.OrdinalIgnoreCase;
     private readonly IChatTransport transport;
     private readonly Func<long> now;
@@ -33,6 +33,7 @@ public sealed partial class GroupClient : IDisposable
     private ActiveRun? activeRun;
     private bool disposed;
     private bool localReady;
+    private bool deferredReady;
     private readonly string countdownProbeId = NewId();
     private bool resetting;
 
@@ -171,21 +172,28 @@ public sealed partial class GroupClient : IDisposable
         if (Members.Length < 2) { Status = "Пригласите хотя бы одного участника."; return; }
         if (activeRun is not null) { Status = "Предыдущий запуск ещё не завершён."; return; }
         if (transport.PendingFrames > 24) { Status = "Подождите, пока отправятся сообщения группы."; return; }
-        var timeout = Math.Max(60_000, (transport.PendingFrames + Members.Length * 2L + 2) * transport.SendIntervalMs + 15_000);
+        var timeout = Math.Max(90_000, (transport.PendingFrames + Members.Length * 2L + 2) * transport.SendIntervalMs + 15_000);
         activeRun = new ActiveRun(NewId(), emoteId, Members.Select(m => m.Id).ToArray(), now() + timeout, countdownSeconds);
         var packet = new Packet { Type = Kind.Prepare, GroupId = GroupId, Revision = revision, RunId = activeRun.Id, EmoteId = emoteId, CountdownSeconds = countdownSeconds };
-        if (!Broadcast(packet)) return;
+        if (!Broadcast(packet, true)) return;
         PrepareLocal(packet);
     }
 
     public void SetReady(string runId, bool ready, string? reason = null)
     {
         if (GroupId is null || runId != PendingRunId) return;
+        if (ready && !ClockReady)
+        {
+            deferredReady = true;
+            if (now() >= clockBurstDeadline) BeginClockBurst();
+            return;
+        }
+        deferredReady = false;
         localReady = ready;
         var packet = new Packet { Type = Kind.Ready, GroupId = GroupId, Revision = revision, RunId = runId,
             Ready = ready, Reason = ready ? null : CleanReason(reason) };
         if (IsLeader) ReceiveReady(identity!, packet);
-        else if (LeaderId is { } leader) Send(leader, packet, !ready);
+        else if (LeaderId is { } leader) Send(leader, packet, true);
     }
 
     public void Cancel()
@@ -205,6 +213,7 @@ public sealed partial class GroupClient : IDisposable
     public void CompleteLocalRun()
     {
         localReady = false;
+        deferredReady = false;
         PendingRunId = null;
         PendingEmoteId = 0;
         ScheduledStartAtUnixMs = null;
@@ -219,6 +228,9 @@ public sealed partial class GroupClient : IDisposable
         if (!IsConnected) return;
         var time = now();
         PollLeadership(time);
+        PollQuietPresence(time);
+        if (recovery is not null) return;
+        if (deferredReady && PendingRunId is { } deferredRun && ClockReady) SetReady(deferredRun, true);
         if (Invitation is not null && time >= invitationDeadline) { Invitation = null; Status = "Время приглашения истекло."; }
         if (joining is { } pending && time >= pending.Expires)
         {
@@ -232,12 +244,17 @@ public sealed partial class GroupClient : IDisposable
                 invitations.Remove(id);
                 Send(invite.Target, new Packet { Type = Kind.InviteResult, GroupId = GroupId, InviteId = id, Reason = "Время приглашения истекло." });
             }
-            var lost = Members.Where(m => !Same(m.Id, identity) && time - memberSeen.GetValueOrDefault(m.Id) >= PeerLifetimeMs).Select(m => m.Id).ToArray();
+            var lost = Members.Where(m => !Same(m.Id, identity) && time - memberSeen.GetValueOrDefault(m.Id) >= PeerLifetimeMs &&
+                time >= unconfirmedJoins.GetValueOrDefault(m.Id)).Select(m => m.Id).ToArray();
             if (lost.Length > 0)
             {
                 AbortRun("Один из участников не отвечает.");
                 Members = Members.Where(m => !lost.Contains(m.Id, Names)).ToArray();
-                foreach (var member in lost) { memberSeen.Remove(member); membershipInvites.Remove(member); }
+                foreach (var member in lost)
+                {
+                    memberSeen.Remove(member); membershipInvites.Remove(member); unconfirmedJoins.Remove(member);
+                    if (GroupId is { } group) transport.ForgetRecipient(member, group);
+                }
                 revision++;
                 Snapshot();
             }
@@ -251,16 +268,8 @@ public sealed partial class GroupClient : IDisposable
         {
             if (time - lastLeaderSeen >= PeerLifetimeMs)
             {
-                ClearGroup("Лидер не отвечает. Группа закрыта локально.");
+                BeginRecovery();
                 return;
-            }
-            foreach (var expired in pings.Where(p => time - p.Value >= 90_000).Select(p => p.Key).ToArray()) pings.Remove(expired);
-            if (time >= nextPing && pings.Count < 2)
-            {
-                var nonce = NewId();
-                pings[nonce] = time;
-                Send(leader, new Packet { Type = Kind.Ping, GroupId = GroupId, Nonce = nonce });
-                nextPing = time + (ClockReady ? 30_000 : 2_000);
             }
         }
         if (PendingRunId is not null && !ClockReady && (localReady || ScheduledStartAtUnixMs != null)) Cancel();
@@ -277,6 +286,13 @@ public sealed partial class GroupClient : IDisposable
         var packet = envelope.Packet;
         var sender = Normalize(envelope.Sender);
         if (!IsConnected || sender is null || Same(sender, identity) || packet.ProtocolVersion != Packet.Version) return;
+        // Existing control traffic also proves presence, including leadership acknowledgements.
+        if (GroupId is not null && packet.GroupId == GroupId && Members.Any(m => Same(m.Id, sender)))
+        {
+            if (IsLeader) { memberSeen[sender] = now(); unconfirmedJoins.Remove(sender); }
+            else if (Same(sender, LeaderId)) lastLeaderSeen = now();
+        }
+        if (HandlePresence(sender, packet)) return;
         if (HandleLeadership(sender, packet, envelope.ReceivedAtUnixMs)) return;
         if (packet.Type == Kind.Invitation) { ReceiveInvitation(sender, packet); return; }
         if (packet.Type == Kind.RespondInvite) { ReceiveInviteResponse(sender, packet); return; }
@@ -296,12 +312,13 @@ public sealed partial class GroupClient : IDisposable
             if (!Members.Any(m => Same(m.Id, sender))) return;
             memberSeen[sender] = now();
             ObserveLeadershipMember(sender);
+            departureWaiting.Remove(sender);
             switch (packet.Type)
             {
                 case Kind.Ping:
                     if (ValidId(packet.Nonce) && packet.ClientSendTime > 0)
                         Send(sender, new Packet { Type = Kind.Pong, GroupId = GroupId, Nonce = packet.Nonce,
-                            ClientSendTime = packet.ClientSendTime, ServerReceiveTime = envelope.ReceivedAtUnixMs });
+                            ClientSendTime = packet.ClientSendTime, ServerReceiveTime = envelope.ReceivedAtUnixMs }, true);
                     break;
                 case Kind.Ready: ReceiveReady(sender, packet); break;
                 case Kind.Cancel:
@@ -312,7 +329,9 @@ public sealed partial class GroupClient : IDisposable
                     AbortRun("Участник вышел из группы.");
                     Members = Members.Where(m => !Same(m.Id, sender)).ToArray();
                     memberSeen.Remove(sender);
+                    unconfirmedJoins.Remove(sender);
                     membershipInvites.Remove(sender);
+                    transport.ForgetRecipient(sender, GroupId!);
                     revision++;
                     Snapshot();
                     break;
@@ -371,9 +390,12 @@ public sealed partial class GroupClient : IDisposable
         AbortRun("Состав группы изменился. Запустите эмоцию заново.");
         Members = [.. Members, new Member(sender, sender)];
         memberSeen[sender] = now();
+        // The roster may still be queued behind earlier invitations. This grace ends on the
+        // first authenticated group response; established members always use the 30 s timeout.
+        unconfirmedJoins[sender] = now() + InviteLifetimeMs;
         membershipInvites[sender] = id;
         revision++;
-        Snapshot();
+        Snapshot(sender);
         Status = $"{sender} вступил в эмоциональную группу.";
     }
 
@@ -413,6 +435,7 @@ public sealed partial class GroupClient : IDisposable
             synchronization.Reset();
             pings.Clear();
             nextPing = 0;
+            BeginClockBurst();
         }
         Status = ClockReady ? "Состав эмоциональной группы обновлён." : "Вы в группе. Синхронизация времени с лидером…";
     }
@@ -420,6 +443,7 @@ public sealed partial class GroupClient : IDisposable
     private void PrepareLocal(Packet packet)
     {
         if (packet.RunId is null || !Remember(packet.RunId, seenRuns, recentRuns)) return;
+        if (!ClockReady) BeginClockBurst();
         PendingRunId = packet.RunId;
         localReady = false;
         RequestedCountdownSeconds = packet.CountdownSeconds is >= 1 and <= 60 ? packet.CountdownSeconds : 3;
@@ -486,14 +510,14 @@ public sealed partial class GroupClient : IDisposable
         if (PendingRunId == run.Id) ClearRun(reason);
     }
 
-    private void Snapshot()
+    private void Snapshot(string? firstMember = null)
     {
         if (GroupId is null) return;
-        foreach (var member in Members.ToArray())
+        foreach (var member in Members.OrderBy(m => Same(m.Id, firstMember) ? 0 : 1).ToArray())
         {
             if (Same(member.Id, identity)) continue;
             if (!Send(member.Id, new Packet { Type = Kind.Group, GroupId = GroupId, LeaderId = LeaderId,
-                Members = Members, Revision = revision, InviteId = membershipInvites.GetValueOrDefault(member.Id) })) return;
+                Members = Members, Revision = revision, InviteId = membershipInvites.GetValueOrDefault(member.Id) }, true)) return;
         }
     }
 
@@ -530,6 +554,7 @@ public sealed partial class GroupClient : IDisposable
     private void ClearGroup(string reason, bool purgeOutbound = true)
     {
         ClearLeadership();
+        ClearPresence();
         if (purgeOutbound)
         {
             if (GroupId is { } group) transport.ForgetGroup(group);
@@ -567,6 +592,7 @@ public sealed partial class GroupClient : IDisposable
     }
     private bool RequireLeader()
     {
+        if (IsRecoveringGroup) { Status = "Дождитесь восстановления связи со всеми участниками."; return false; }
         if (IsTransferringLeadership) { Status = "Дождитесь завершения передачи лидерства."; return false; }
         if (RequireIdentity() && IsLeader) return true;
         Status = "Это действие доступно лидеру эмоциональной группы.";

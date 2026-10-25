@@ -1,9 +1,9 @@
 [
   {
-    "Author": "EmoteTogether contributors",
+    "Author": "Ringoto",
     "Name": "Emote Together",
     "InternalName": "EmoteTogether",
-    "AssemblyVersion": "0.3.0.0",
+    "AssemblyVersion": "0.4.0.0",
     "Description": "Создайте эмоциональную группу до восьми игроков, пригласите друзей и запустите доступную всем эмоцию после общего обратного отсчёта. Обмен идёт через личные сообщения FFXIV; отдельный сервер и настройка сети не нужны. Всем участникам необходимы плагин и доступный /tell.",
     "ApplicableVersion": "any",
     "RepoUrl": "https://github.com/Stasik1960/FFXIV-Plug",
@@ -15,16 +15,16 @@
     "DalamudApiLevel": 15,
     "LoadRequiredState": 0,
     "LoadSync": false,
-    "CanUnloadAsync": false,
+    "CanUnloadAsync": true,
     "LoadPriority": 0,
     "Punchline": "Группа для синхронного запуска эмоций.",
     "AcceptsFeedback": true,
-    "DownloadLinkInstall": "https://raw.githubusercontent.com/Stasik1960/FFXIV-Plug/main/plugins/EmoteTogether/0.3.0/EmoteTogether.zip",
-    "DownloadLinkUpdate": "https://raw.githubusercontent.com/Stasik1960/FFXIV-Plug/main/plugins/EmoteTogether/0.3.0/EmoteTogether.zip",
-    "DownloadLinkTesting": "https://raw.githubusercontent.com/Stasik1960/FFXIV-Plug/main/plugins/EmoteTogether/0.3.0/EmoteTogether.zip",
+    "DownloadLinkInstall": "https://raw.githubusercontent.com/Stasik1960/FFXIV-Plug/main/plugins/EmoteTogether/0.4.0/EmoteTogether.zip",
+    "DownloadLinkUpdate": "https://raw.githubusercontent.com/Stasik1960/FFXIV-Plug/main/plugins/EmoteTogether/0.4.0/EmoteTogether.zip",
+    "DownloadLinkTesting": "https://raw.githubusercontent.com/Stasik1960/FFXIV-Plug/main/plugins/EmoteTogether/0.4.0/EmoteTogether.zip",
     "IsHide": false,
     "IsTestingExclusive": false,
-    "LastUpdate": 1792964365,
-    "Changelog": "Новый тёмный интерфейс с отключаемым фоном тигра. Выбор задержки старта: по умолчанию 3 секунды для пары, минимум большой группы учитывает доставку /tell. Передача лидерства участнику. Всем участникам требуется версия 0.3.0 (протокол ET3)."
+    "LastUpdate": 1792968067,
+    "Changelog": "Приглашение цели одним нажатием. Сворачивание до заголовка и перемещаемая мини-панель с тигром и быстрым запуском. Служебные сообщения скрываются до обработки Aetherphone; постоянная синхронизация часов убрана. Таймаут участника 30 секунд, автоматическая смена пропавшего лидера. Автор: Ringoto. Всем участникам требуется версия 0.4.0 (протокол ET4)."
   }
 ]

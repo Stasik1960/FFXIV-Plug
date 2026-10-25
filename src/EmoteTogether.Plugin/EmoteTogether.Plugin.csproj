@@ -1,12 +1,13 @@
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <AssemblyName>EmoteTogether</AssemblyName>
     <RootNamespace>EmoteTogether.Plugin</RootNamespace>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Author>EmoteTogether contributors</Author>
+    <Author>Ringoto</Author>
+    <CanUnloadAsync>true</CanUnloadAsync>
     <RepoUrl>https://github.com/Stasik1960/FFXIV-Plug</RepoUrl>
     <Name>Emote Together</Name>
     <Punchline>Группа для синхронного запуска эмоций.</Punchline>

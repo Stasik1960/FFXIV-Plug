@@ -1,11 +1,17 @@
-Emote Together 0.3.0 - serverless validation record
+Emote Together 0.4.0 - serverless validation record
+Author: Ringoto
 Date: 2026-10-25 (Europe/Oslo)
 
 Environment: Windows x64, .NET SDK 10.0.401, installed Dalamud 15.0.3.9 / API 15.
 dotnet build EmoteTogether.slnx -c Release: PASS, 0 warnings, 0 errors.
-Clock synchronization: PASS, 12 assertions, long chat queue time excluded.
+Clock synchronization: PASS, 12 assertions, send queue delay excluded, 10-minute freshness.
 Chat codec and identities: PASS, 11 scenarios / 390 assertions.
-Paced chat transport: PASS, 20 assertions.
+Control frame classification: PASS, 17 assertions; ET4, legacy ET2/ET3 and malformed/ordinary chat.
+Paced chat transport: PASS, 36 assertions.
+  Priority FIFO, critical messages before presence/clock replies, unsent pulse coalescing.
+  Delivery estimates account for active fragments, cooldown and earlier critical work.
+  Deadline heartbeats protect liveness during long critical queues; estimates include their delivery.
+  Completed logical packets replace redundant heartbeats; departed routes are forgotten.
 Serverless group simulations: PASS, 49 assertions with 2, 3 and 8 participants.
   Real encoded/framed payloads over a simulated chat bus, 1500ms send spacing.
   Independently skewed clocks, authenticated senders, explicit invitation acceptance.
@@ -14,21 +20,39 @@ Serverless group simulations: PASS, 49 assertions with 2, 3 and 8 participants.
   Cancellation, negative readiness, completed runs, stale schedules, leave and disband.
   Queued invitation purged on close; joining group closed before roster arrives.
   Simultaneous accepts survive roster coalescing; all 8 receive a future deadline.
-  Dropped messages, preparation timeout and peer liveness expiration.
-  Configured pair countdowns of 3, 5 and 10 seconds are preserved without the old 15-second floor.
-  Large group and partial-fragment queues expose a delivery minimum before scheduling.
-Leadership transfer: PASS, 7 scenarios / 33 assertions.
-  Chained handoff, exclusive authority, 2/3/8 participants, all-member acknowledgements.
-  New leader can start; former leader cannot; clocks resynchronize to the new leader.
-  Forged/stale packets, rejoining membership proofs, active-run block and group close.
-  Missing offer retains previous leader; uncertain commit fails closed; bounded retry recovers lost ACK.
+  Configured pair countdowns of 3, 5 and 10 seconds; large group delivery minimum.
+Leadership transfer: PASS, 11 scenarios / 77 assertions.
+  Chained handoff, 2/3/8 participants, all-member acknowledgements and clock resynchronization.
+  Forged/stale packets, membership proofs, active-run block, bounded retry, lost offer/commit/ACK.
+  Compact authenticated handoff commits, clock refresh after settlement, five heartbeat phases.
+Presence and automatic recovery: PASS, 17 scenarios / 44 assertions.
+  Established peer timeout 30000ms; one-way presence interval 12000ms; no idle Ping/Pong loop.
+  Bounded initial join grace, clock refresh on demand, stable idle 8-member group.
+  Five phases of stale-clock restart; eight distinct long character/world names through join,
+  manual handoff, abrupt leader recovery and 45 seconds of subsequent stability.
+  Guest departure, graceful leader unload, abrupt leader loss in 2/3/8-member groups.
+  Recovery when the first successor is also offline; insufficient quorum fails closed.
+  New recovery group ID rejects old leader authority and stale recovery packets.
+  Simulated abrupt-loss readiness: pair 25.0s, 3 members 37.1s, 8 members 57.1s.
+  Eight distinct long names: recovered group and clocks ready after 113.8s; stable for 45s.
+  These elapsed results depend on the last received pulse and include recovery and clock delivery.
+  Pair idle traffic: 102 compact one-way packets over 610s, no idle clock packets.
+All suites: PASS, 625 assertions per run.
+
 Package contains plugin, client and protocol assemblies, manifest, deps.json and Assets/tiger-mouth.jpg.
-Artwork generated with built-in imagegen, 1536x1024; runtime JPEG optimized at quality 88.
-Configuration inspected: CountdownSeconds=3, ShowTigerBackground=true by default.
-Settings callback and in-window settings both open the appearance popup; saved false is preserved.
+Manifest: Author=Ringoto, AssemblyVersion=0.4.0.0, DalamudApiLevel=15, CanUnloadAsync=true.
+Configuration: CountdownSeconds=3, ShowTigerBackground=true, ShowMiniPanel=true by default.
+Existing disabled appearance settings remain disabled after update.
+Main window uses native titlebar collapse; full close exposes the draggable mini-panel.
+Mini-panel shares the tiger setting and opens the expanded main menu or starts the selected emote.
+Target invitation creates the group and invites in one click; explicit recipient consent remains required.
+New invitation opens an expanded window; recovery disables conflicting actions.
+Native chat filter precedes other chat listeners; outgoing frames matched against exact send cache.
+Incoming controls require a game-provided player identity; unrelated/malformed chat passes through.
+Unload keeps the hook alive during bounded departure delivery; late framework callbacks are gated.
 No relay, WebSocket/TCP client, URL settings, or server process is included.
 
 No real chat messages were sent during validation.
-Live log confirms prior version 0.2.0 loaded in Dalamud without startup errors.
-Not tested for 0.3.0: live /tell delivery/suppression, native animation execution inside FFXIV,
-two actual game clients, visual UI layout in a live game, game anti-spam behavior.
+Live log previously confirmed version 0.2.0 loaded in Dalamud without startup errors.
+Not verified live for 0.4.0: native /tell delivery/filtering and Aetherphone unread/notifications,
+native animations in FFXIV, two actual game clients, visual UI layout and game anti-spam behavior.

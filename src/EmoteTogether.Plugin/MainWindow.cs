@@ -20,7 +20,9 @@ internal sealed class MainWindow : Window
     private string inviteName = string.Empty;
     private string search = string.Empty;
     private uint selectedEmote;
+    internal uint SelectedEmoteId => selectedEmote;
     private bool settingsRequested;
+    private bool expandRequested;
     private int colors;
     private int variables;
     private float Scale => ImGuiHelpers.GlobalScale;
@@ -35,17 +37,20 @@ internal sealed class MainWindow : Window
             MinimumSize = new Vector2(780, 680),
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
         };
-        Flags = ImGuiWindowFlags.NoCollapse;
+        Flags = ImGuiWindowFlags.None;
     }
 
     public void OpenSettings()
     {
-        IsOpen = true;
+        OpenExpanded();
         settingsRequested = true;
     }
 
+    internal void OpenExpanded() { IsOpen = true; expandRequested = true; }
+
     public override void PreDraw()
     {
+        if (expandRequested) { ImGui.SetNextWindowCollapsed(false, ImGuiCond.Always); expandRequested = false; }
         colors = 0;
         variables = 0;
         Push(ImGuiCol.WindowBg, Ink);
@@ -144,16 +149,18 @@ internal sealed class MainWindow : Window
         LargeText(client.IsJoining ? "Ждём подтверждения" : "Соберите свою группу", 1.35f);
         Wrapped(client.IsJoining ? "Лидер подтверждает состав. Это может занять несколько секунд." : "Для двоих, компании друзей или общего танца — до 8 участников.", Muted);
         Gap(18);
-        Step("01", "Создайте группу", "Станьте лидером и пригласите друга.");
+        Step("01", "Выберите друга", "Нажмите «Пригласить цель» — группа создастся автоматически.");
         Step("02", "Выберите эмоцию", "Используйте эмоцию, открытую у всех участников.");
         Step("03", "Поймайте общий момент", "Настройте отсчёт и запустите её вместе.");
         Gap(16);
-        ImGui.BeginDisabled(!client.IsConnected || client.IsJoining);
-        if (AccentButton("Создать эмоциональную группу", new Vector2(350 * Scale, 46 * Scale))) client.CreateGroup();
+        DrawTargetInvitation(350 * Scale, 44 * Scale, true);
+        ImGui.BeginDisabled(!client.IsConnected || client.IsJoining || client.IsRecoveringGroup);
+        if (ImGui.Button("Создать пустую группу", new Vector2(235 * Scale, 32 * Scale))) client.CreateGroup();
         ImGui.EndDisabled();
         if (client.IsJoining && ImGui.Button("Отменить вступление")) client.LeaveGroup();
         Gap(10);
         Wrapped("У всех должен быть установлен плагин и доступен /tell. Обычная игровая party не требуется.", Muted);
+        DrawInvitePopup();
     }
 
     private void DrawGroup(float height)
@@ -183,7 +190,8 @@ internal sealed class MainWindow : Window
         Label("ВАША ГРУППА", Amber);
         ImGui.SameLine();
         ImGui.TextColored(Muted, $"{client.Members.Length} / 8");
-        using (var list = ImRaii.Child("##members", new Vector2(0, Math.Max(85 * Scale, ImGui.GetContentRegionAvail().Y - 48 * Scale)), false))
+        var actionHeight = (client.IsLeader ? 82 : 42) * Scale;
+        using (var list = ImRaii.Child("##members", new Vector2(0, Math.Max(45 * Scale, ImGui.GetContentRegionAvail().Y - actionHeight)), false))
         {
             if (list.Success)
             {
@@ -202,7 +210,7 @@ internal sealed class MainWindow : Window
                     if (canTransfer)
                     {
                         ImGui.SetCursorPos(cursor + new Vector2(width - transferWidth, 3 * Scale));
-                        ImGui.BeginDisabled(plugin.HasPendingRun || client.IsTransferringLeadership);
+                        ImGui.BeginDisabled(plugin.HasPendingRun || client.IsTransferringLeadership || client.IsRecoveringGroup);
                         if (ImGui.SmallButton($"Передать##{member.Id}")) client.TransferLeadership(member.Id);
                         if (ImGui.IsItemHovered()) ImGui.SetTooltip("Передать лидерство этому участнику");
                         ImGui.EndDisabled();
@@ -213,11 +221,8 @@ internal sealed class MainWindow : Window
         }
         if (client.IsLeader)
         {
-            ImGui.BeginDisabled(plugin.HasPendingRun || client.IsTransferringLeadership || client.Members.Length >= 8);
-            if (ImGui.Button("Пригласить", new Vector2(121 * Scale, 34 * Scale))) ImGui.OpenPopup("##invitePopup");
-            ImGui.EndDisabled();
-            ImGui.SameLine();
-            if (ImGui.Button("Распустить", new Vector2(-1, 34 * Scale)))
+            DrawTargetInvitation(ImGui.GetContentRegionAvail().X - 36 * Scale - ImGui.GetStyle().ItemSpacing.X, 30 * Scale, false);
+            if (ImGui.Button("Распустить группу", new Vector2(-1, 30 * Scale)))
             {
                 if (plugin.HasPendingRun) plugin.CancelRun();
                 client.LeaveGroup();
@@ -234,6 +239,46 @@ internal sealed class MainWindow : Window
         DrawInvitePopup();
     }
 
+    private void DrawTargetInvitation(float width, float height, bool accent)
+    {
+        var client = plugin.Client;
+        var targetName = GetTargetName();
+        var unavailable = !client.IsConnected || client.IsJoining || plugin.HasPendingRun ||
+            client.IsTransferringLeadership || client.IsRecoveringGroup || client.Members.Length >= 8 ||
+            (client.GroupId is not null && !client.IsLeader);
+        var validTarget = targetName is not null &&
+            !string.Equals(targetName, plugin.CharacterIdentity, StringComparison.OrdinalIgnoreCase) &&
+            !client.Members.Any(member => string.Equals(member.Id, targetName, StringComparison.OrdinalIgnoreCase));
+        ImGui.BeginDisabled(unavailable || !validTarget);
+        var clicked = accent
+            ? AccentButton("Пригласить цель", new Vector2(width, height))
+            : ImGui.Button("Пригласить цель", new Vector2(width, height));
+        if (clicked && targetName is not null) InvitePlayer(targetName);
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(targetName is null ? "Выберите персонажа друга в игре" : $"Пригласить: {targetName}");
+        ImGui.EndDisabled();
+        ImGui.SameLine();
+        ImGui.BeginDisabled(unavailable);
+        if (ImGui.Button("…##inviteByName", new Vector2(36 * Scale, height))) ImGui.OpenPopup("##invitePopup");
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip("Пригласить по имени");
+        ImGui.EndDisabled();
+    }
+
+    private static string? GetTargetName()
+    {
+        var target = Plugin.Targets.Target as IPlayerCharacter;
+        return target is not null && target.HomeWorld.IsValid
+            ? $"{target.Name.TextValue}@{target.HomeWorld.Value.Name.ExtractText()}"
+            : null;
+    }
+
+    private void InvitePlayer(string name)
+    {
+        var client = plugin.Client;
+        if (client.GroupId is null) client.CreateGroup();
+        if (client.IsLeader) client.Invite(name);
+    }
+
     private void DrawInvitePopup()
     {
         ImGui.SetNextWindowSize(new Vector2(420 * Scale, 0), ImGuiCond.Always);
@@ -241,24 +286,15 @@ internal sealed class MainWindow : Window
         try
         {
             Label("ПРИГЛАСИТЬ ДРУГА", Amber);
-            Wrapped("Выберите персонажа в игре или укажите имя с домашним миром.", Muted);
-            var target = Plugin.Targets.Target as IPlayerCharacter;
-            var targetName = target is not null && target.HomeWorld.IsValid
-                ? $"{target.Name.TextValue}@{target.HomeWorld.Value.Name.ExtractText()}" : null;
-            ImGui.BeginDisabled(targetName == null || targetName == plugin.CharacterIdentity || plugin.Client.Members.Length >= 8);
-            if (AccentButton("Пригласить цель", new Vector2(-1, 38 * Scale)) && targetName != null)
-            {
-                plugin.Client.Invite(targetName);
-                ImGui.CloseCurrentPopup();
-            }
-            ImGui.EndDisabled();
-            Gap(7);
+            Wrapped("Укажите имя персонажа с домашним миром.", Muted);
             ImGui.SetNextItemWidth(-1);
             ImGui.InputTextWithHint("##inviteName", "Имя Фамилия@ДомашнийМир", ref inviteName, 128);
-            ImGui.BeginDisabled(string.IsNullOrWhiteSpace(inviteName) || plugin.Client.Members.Length >= 8);
+            ImGui.BeginDisabled(string.IsNullOrWhiteSpace(inviteName) || !plugin.Client.IsConnected ||
+                plugin.Client.IsJoining || plugin.HasPendingRun || plugin.Client.IsTransferringLeadership ||
+                plugin.Client.IsRecoveringGroup || plugin.Client.Members.Length >= 8);
             if (ImGui.Button("Пригласить по имени", new Vector2(-1, 36 * Scale)))
             {
-                plugin.Client.Invite(inviteName.Trim());
+                InvitePlayer(inviteName.Trim());
                 ImGui.CloseCurrentPopup();
             }
             ImGui.EndDisabled();
@@ -281,7 +317,7 @@ internal sealed class MainWindow : Window
             return;
         }
         var minimum = Math.Max(1, client.MinimumCountdownSeconds);
-        ImGui.BeginDisabled(plugin.HasPendingRun || client.IsTransferringLeadership || minimum > 60);
+        ImGui.BeginDisabled(plugin.HasPendingRun || client.IsTransferringLeadership || client.IsRecoveringGroup || minimum > 60);
         foreach (var preset in new[] { 3, 5, 10 })
         {
             if (preset != 3) ImGui.SameLine();
@@ -314,7 +350,7 @@ internal sealed class MainWindow : Window
             DrawRunState();
             return;
         }
-        ImGui.BeginDisabled(plugin.HasPendingRun || client.IsTransferringLeadership);
+        ImGui.BeginDisabled(plugin.HasPendingRun || client.IsTransferringLeadership || client.IsRecoveringGroup);
         ImGui.SetNextItemWidth(-1);
         ImGui.InputTextWithHint("##emoteSearch", "Найти эмоцию или команду…", ref search, 128);
         using (var list = ImRaii.Child("##emoteList", new Vector2(0, Math.Max(95 * Scale, ImGui.GetContentRegionAvail().Y - 145 * Scale)), false))
@@ -336,7 +372,8 @@ internal sealed class MainWindow : Window
         ImGui.Separator();
         Label(selectedEmote == 0 ? "Выберите эмоцию в списке" : plugin.Emotes.NameFor(selectedEmote), Text);
         var effective = Math.Max(plugin.Configuration.CountdownSeconds, client.MinimumCountdownSeconds);
-        ImGui.BeginDisabled(selectedEmote == 0 || !client.ClockReady || client.Members.Length < 2 || client.IsTransferringLeadership || effective > 60);
+        ImGui.BeginDisabled(selectedEmote == 0 || !client.ClockReady || client.Members.Length < 2 ||
+            client.IsTransferringLeadership || client.IsRecoveringGroup || effective > 60);
         if (AccentButton($"Запустить вместе · {effective} с", new Vector2(-1, 44 * Scale)))
             client.Start(selectedEmote, plugin.Configuration.CountdownSeconds);
         ImGui.EndDisabled();
@@ -362,7 +399,12 @@ internal sealed class MainWindow : Window
 
     private void DrawStatus()
     {
-        if (plugin.Client.IsTransferringLeadership)
+        if (plugin.Client.IsRecoveringGroup)
+        {
+            Wrapped("Восстанавливаем эмоциональную группу…", Amber);
+            Wrapped(plugin.Client.Status, Muted);
+        }
+        else if (plugin.Client.IsTransferringLeadership)
             Wrapped($"Передаём лидерство: {plugin.Client.PendingLeaderId}…", Amber);
         else Wrapped(plugin.Client.Status, Muted);
         Wrapped(plugin.LocalStatus, Text);
@@ -390,7 +432,14 @@ internal sealed class MainWindow : Window
             LargeText("Внешний вид", 1.2f);
             var showTiger = plugin.Configuration.ShowTigerBackground;
             if (ImGui.Checkbox("Фон с тигром", ref showTiger)) plugin.SaveAppearance(showTiger);
-            Wrapped("Показывать изображение тигра на фоне окна. При отключении остаётся тёмная тема.", Muted);
+            Wrapped("Показывать тигра в основном окне и на мини-панели. При отключении остаётся тёмная тема.", Muted);
+            Gap(8);
+            var showMiniPanel = plugin.Configuration.ShowMiniPanel;
+            if (ImGui.Checkbox("Мини-панель при закрытом окне", ref showMiniPanel)) plugin.SaveMiniPanel(showMiniPanel);
+            Wrapped("Показывать компактную перемещаемую панель, когда основное окно закрыто. При сворачивании до заголовка она не появляется.", Muted);
+            Gap(10);
+            Wrapped(plugin.PhoneFilterActive ? "Служебные сообщения скрыты из чата и телефона." :
+                "Фильтр телефона недоступен. Подробности в /xllog.", plugin.PhoneFilterActive ? Muted : Amber);
             Gap(10);
             if (ImGui.Button("Готово", new Vector2(-1, 36 * Scale))) ImGui.CloseCurrentPopup();
         }

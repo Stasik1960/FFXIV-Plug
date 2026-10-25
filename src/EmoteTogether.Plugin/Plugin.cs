@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Command;
 using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
@@ -22,6 +23,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static ITargetManager Targets { get; private set; } = null!;
     [PluginService] internal static IChatGui Chat { get; private set; } = null!;
     [PluginService] internal static ITextureProvider Textures { get; private set; } = null!;
+    [PluginService] internal static IGameInteropProvider Interop { get; private set; } = null!;
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
 
     internal Configuration Configuration { get; }
@@ -29,12 +31,18 @@ public sealed class Plugin : IDalamudPlugin
     internal GameEmotes Emotes { get; }
     internal string LocalStatus { get; private set; } = "Создайте эмоциональную группу и пригласите друга.";
     internal bool HasPendingRun => Client.PendingRunId is not null;
+    internal uint SelectedEmoteId => window.SelectedEmoteId;
+    internal bool PhoneFilterActive => transport.PhoneFilterActive;
+    internal bool CanStartSelectedEmote => Client.IsLeader && Client.Members.Length >= 2 && SelectedEmoteId != 0 &&
+        !HasPendingRun && !Client.IsTransferringLeadership && !Client.IsRecoveringGroup && Client.ClockReady;
     internal double? CountdownSeconds => scheduledTicks is { } ticks
         ? Math.Max(0, (ticks - Stopwatch.GetTimestamp()) / (double)Stopwatch.Frequency)
         : null;
 
     private readonly WindowSystem windows = new("EmoteTogether");
     private readonly MainWindow window;
+    private readonly MiniWindow miniWindow;
+    private readonly GameChatTransport transport;
     private readonly MonotonicClock clock = new();
     private string? activeCharacter;
     private string? preparedRunId;
@@ -48,13 +56,15 @@ public sealed class Plugin : IDalamudPlugin
     public Plugin()
     {
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new();
-        Configuration.Version = 3;
+        Configuration.Version = 4;
         Configuration.CountdownSeconds = Math.Clamp(Configuration.CountdownSeconds, 1, 60);
-        var transport = new GameChatTransport(Chat, () => clock.UnixMilliseconds);
+        transport = new GameChatTransport(Chat, Interop, () => clock.UnixMilliseconds, Log);
         Client = new GroupClient(transport, () => clock.UnixMilliseconds);
         Emotes = new GameEmotes(Data, ClientState, Objects, Conditions);
         window = new MainWindow(this);
         windows.AddWindow(window);
+        miniWindow = new MiniWindow(this);
+        windows.AddWindow(miniWindow);
         Commands.AddHandler("/emotegroup", new CommandInfo(OnCommand)
         {
             HelpMessage = "Открыть Emote Together: приглашения и синхронные эмоции группы.",
@@ -91,6 +101,21 @@ public sealed class Plugin : IDalamudPlugin
         Configuration.ShowTigerBackground = showTiger;
         PluginInterface.SavePluginConfig(Configuration);
     }
+
+    internal void SaveMiniPanel(bool enabled)
+    {
+        Configuration.ShowMiniPanel = enabled;
+        PluginInterface.SavePluginConfig(Configuration);
+        UpdateMiniVisibility();
+    }
+
+    internal void OpenMainMenu() => window.OpenExpanded();
+    internal void StartSelectedEmote()
+    {
+        if (CanStartSelectedEmote) Client.Start(SelectedEmoteId, Configuration.CountdownSeconds);
+    }
+
+    private void UpdateMiniVisibility() => miniWindow.IsOpen = Configuration.ShowMiniPanel && Client.IsConnected && !window.IsOpen;
 
     private void OnPrepare(Packet packet)
     {
@@ -136,6 +161,7 @@ public sealed class Plugin : IDalamudPlugin
         {
             // Identity is reset before processing messages from the previous character's group.
             var identity = CharacterIdentity;
+            if (identity == null && ClientState.IsLoggedIn) identity = activeCharacter;
             if (!string.Equals(identity, activeCharacter, StringComparison.OrdinalIgnoreCase))
             {
                 ClearRun();
@@ -146,10 +172,11 @@ public sealed class Plugin : IDalamudPlugin
             }
             // Transport sends at most one paced frame; all game calls remain on the framework thread.
             Client.Poll();
+            UpdateMiniVisibility();
             if (Client.Invitation is { } invitation && invitation.InviteId != lastInvitationId)
             {
                 lastInvitationId = invitation.InviteId;
-                window.IsOpen = true;
+                window.OpenExpanded();
             }
             if (Stopwatch.GetElapsedTime(lastCatalogRefresh).TotalSeconds >= 2)
             {
@@ -235,7 +262,7 @@ public sealed class Plugin : IDalamudPlugin
     }
 
     private void OnCommand(string command, string arguments) => window.Toggle();
-    private void OpenWindow() => window.IsOpen = true;
+    private void OpenWindow() => OpenMainMenu();
     private void OpenSettings() => window.OpenSettings();
 
     public void Dispose()
@@ -251,7 +278,55 @@ public sealed class Plugin : IDalamudPlugin
         Client.ScheduledReceived -= OnScheduled;
         Client.Cancelled -= OnCancelled;
         Client.Disconnected -= OnDisconnected;
+        DrainDepartureBeforeUnload();
         Client.Dispose();
         windows.RemoveAllWindows();
+    }
+
+    private void DrainDepartureBeforeUnload()
+    {
+        if (Framework.IsFrameworkUnloading) return;
+        var drainGate = new object();
+        var drainClosed = false;
+        try
+        {
+            void Prepare()
+            {
+                lock (drainGate)
+                {
+                    if (drainClosed || !Client.IsConnected || !ClientState.IsLoggedIn || Conditions[ConditionFlag.LoggingOut]) return;
+                    transport.QueueDeparture(Client.PrepareDeparture());
+                }
+            }
+            if (Framework.IsInFrameworkUpdateThread)
+            {
+                Prepare();
+                if (ClientState.IsLoggedIn && !Conditions[ConditionFlag.LoggingOut]) transport.Poll();
+                return;
+            }
+            // Dalamud runs unload on a worker (CanUnloadAsync). Native sends stay on Framework.
+            Framework.RunOnFrameworkThread(Prepare).WaitAsync(TimeSpan.FromSeconds(2)).GetAwaiter().GetResult();
+            var deadline = Stopwatch.StartNew();
+            while (transport.PendingFrames > 0 && deadline.Elapsed < TimeSpan.FromSeconds(20) && !Framework.IsFrameworkUnloading)
+            {
+                var sent = Framework.RunOnFrameworkThread(() =>
+                {
+                    lock (drainGate)
+                    {
+                        if (drainClosed || !ClientState.IsLoggedIn || Conditions[ConditionFlag.LoggingOut]) return false;
+                        transport.Poll();
+                        return true;
+                    }
+                }).WaitAsync(TimeSpan.FromSeconds(2)).GetAwaiter().GetResult();
+                if (!sent) break;
+                if (transport.PendingFrames > 0) Thread.Sleep(100);
+            }
+        }
+        catch (Exception error) { Log.Debug(error, "Departure could not be fully delivered before unload"); }
+        finally
+        {
+            // A timed-out framework task may still be queued. It must not use the disposed client later.
+            lock (drainGate) drainClosed = true;
+        }
     }
 }
