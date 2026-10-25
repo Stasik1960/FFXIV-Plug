@@ -1,0 +1,21 @@
+<Project Sdk="Dalamud.NET.Sdk/15.0.0">
+  <PropertyGroup>
+    <Version>0.1.0</Version>
+    <AssemblyName>SlapYourFriend</AssemblyName>
+    <RootNamespace>SlapYourFriend.Plugin</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Author>Ringoto</Author>
+    <CanUnloadAsync>true</CanUnloadAsync>
+    <RepoUrl>https://github.com/Stasik1960/FFXIV-Plug</RepoUrl>
+    <Name>Slap Your Friend</Name>
+    <Punchline>Дружеская пощёчина при встрече.</Punchline>
+    <Description>Выберите друзей или добавьте имена персонажей. Когда вы рядом, персонаж выполняет /slap на выбранного игрока. У каждого игрока свой интервал повтора в минутах. Настраиваемая дистанция, простой интерфейс и отключаемая иллюстрация. Сервер и установка плагина у друзей не требуются.</Description>
+    <Tags>emote;social;slap;friends</Tags>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../SlapYourFriend.Core/SlapYourFriend.Core.csproj" />
+    <Content Include="Assets/friendly-slap.jpg" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

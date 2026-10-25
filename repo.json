@@ -26,5 +26,34 @@
     "IsTestingExclusive": false,
     "LastUpdate": 1792968067,
     "Changelog": "Приглашение цели одним нажатием. Сворачивание до заголовка и перемещаемая мини-панель с тигром и быстрым запуском. Служебные сообщения скрываются до обработки Aetherphone; постоянная синхронизация часов убрана. Таймаут участника 30 секунд, автоматическая смена пропавшего лидера. Автор: Ringoto. Всем участникам требуется версия 0.4.0 (протокол ET4)."
+  },
+  {
+    "Author": "Ringoto",
+    "Name": "Slap Your Friend",
+    "InternalName": "SlapYourFriend",
+    "AssemblyVersion": "0.1.0.0",
+    "Description": "Выберите друзей или добавьте имена персонажей. Когда вы рядом, персонаж выполняет /slap на выбранного игрока. У каждого игрока свой интервал повтора в минутах. Настраиваемая дистанция, простой интерфейс и отключаемая иллюстрация. Сервер и установка плагина у друзей не требуются.",
+    "ApplicableVersion": "any",
+    "RepoUrl": "https://github.com/Stasik1960/FFXIV-Plug",
+    "Tags": [
+      "emote",
+      "social",
+      "slap",
+      "friends"
+    ],
+    "DalamudApiLevel": 15,
+    "LoadRequiredState": 0,
+    "LoadSync": false,
+    "CanUnloadAsync": true,
+    "LoadPriority": 0,
+    "Punchline": "Дружеская пощёчина при встрече.",
+    "AcceptsFeedback": true,
+    "DownloadLinkInstall": "https://raw.githubusercontent.com/Stasik1960/FFXIV-Plug/main/plugins/SlapYourFriend/0.1.0/SlapYourFriend.zip",
+    "DownloadLinkUpdate": "https://raw.githubusercontent.com/Stasik1960/FFXIV-Plug/main/plugins/SlapYourFriend/0.1.0/SlapYourFriend.zip",
+    "DownloadLinkTesting": "https://raw.githubusercontent.com/Stasik1960/FFXIV-Plug/main/plugins/SlapYourFriend/0.1.0/SlapYourFriend.zip",
+    "IsHide": false,
+    "IsTestingExclusive": false,
+    "LastUpdate": 1792969644,
+    "Changelog": "Первый выпуск Slap Your Friend. Друзья, выбранная цель или ввод имени; /slap при сближении. Индивидуальный повтор каждые 1–60 минут, по умолчанию 1 минута. Настраиваемая дистанция и минималистичный интерфейс с отключаемой картинкой. Автор: Ringoto."
   }
 ]

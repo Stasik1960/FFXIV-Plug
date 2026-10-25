@@ -3,8 +3,11 @@
     <Project Path="src/EmoteTogether.Client/EmoteTogether.Client.csproj" />
     <Project Path="src/EmoteTogether.Plugin/EmoteTogether.Plugin.csproj" />
     <Project Path="src/EmoteTogether.Protocol/EmoteTogether.Protocol.csproj" />
+    <Project Path="src/SlapYourFriend.Core/SlapYourFriend.Core.csproj" />
+    <Project Path="src/SlapYourFriend.Plugin/SlapYourFriend.Plugin.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/EmoteTogether.Tests/EmoteTogether.Tests.csproj" />
+    <Project Path="tests/SlapYourFriend.Tests/SlapYourFriend.Tests.csproj" />
   </Folder>
 </Solution>

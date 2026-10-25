@@ -1,0 +1,37 @@
+Slap Your Friend 0.1.0 - validation record
+Author: Ringoto
+Date: 2026-10-26 (Europe/Oslo)
+
+Environment: Windows x64, .NET SDK 10.0.401, Dalamud 15.0.3.9 / API15.
+Release build: PASS, 0 warnings, 0 errors.
+Slap core: PASS, 8 scenarios / 63 assertions.
+  Initial approach, standing nearby, individual 1-60 minute repeat timers, elapsed-time edits.
+  Leave/re-enter, missing objects, pause/resume and removed/re-added identities keep timer history.
+  Distance jitter, closest eligible player, 5-second global success spacing, no queued stale action.
+  Invalid/duplicate identities, case/NFC normalization and same-name different-world isolation.
+  Entity ID reuse, stale execution tokens, failed-native backoff and monotonic clock handling.
+Existing Emote Together suites: PASS, 625 assertions.
+
+Integration reviewed:
+  Game callbacks scan at 200ms intervals, loaded friend cache at 2-second intervals.
+  Rules are immutable snapshots; configuration edits invalidate an already selected action.
+  Current object/identity/address, targetability, life state and 3D distance rechecked before use.
+  Only the local character executes /slap, using an explicit PlayEmoteOption.TargetId.
+  Manual hard/soft target is not changed. DisableLogMessage=true avoids emote chat text.
+  Emote ID resolved from English game command data, independent of display language.
+  Combat, zone transitions, dialogues, mounted states, GPose/PvP and existing emotes block use.
+  Zone transitions and pause preserve timers; local session/character changes reset them.
+  Friend list reads loaded InfoProxyFriendList entries, capped at200, skipping pending requests.
+  Full character name + HomeWorld required; plain name resolves a unique cached friend or own world.
+  Native calls stay on Framework.Update; dispose removes callbacks without pending execution.
+
+Defaults: Enabled=true with an initially empty list; Radius=2m; IntervalMinutes=1 per player;
+ShowBackground=true. Radius adjustable1-4m, per-player interval1-60min.
+Package: SlapYourFriend.dll/json/deps.json, SlapYourFriend.Core.dll, Assets/friendly-slap.jpg.
+Metadata: Author=Ringoto, AssemblyVersion=0.1.0.0, DalamudApiLevel=15.
+Runtime artwork: 1536x1024 JPEG, 223467 bytes; bundled with the plugin.
+No network transport, tell control messages, game chat command text, relay or external server.
+Two-entry catalog packaging preserves the existing EmoteTogether0.4.0 entry/package.
+
+No native animation or real chat/emote was executed during automated validation.
+Live FFXIV window rendering, friend-list cache loading and targeted native slap need in-game testing.
