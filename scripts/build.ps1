@@ -34,6 +34,9 @@ try {
     foreach ($name in @('PartyArt.dll', 'PartyArt.json', 'PartyArt.deps.json', 'PartyArt.Core.dll')) {
         Copy-Item -LiteralPath (Join-Path $artOutput $name) -Destination $artDist -Force
     }
+    $artAssets = Join-Path $artDist 'Assets'
+    New-Item -ItemType Directory -Path $artAssets -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $artOutput 'Assets/wolf.jpg') -Destination $artAssets -Force
     Write-Host 'Ready: dist/plugin, dist/SlapYourFriend and dist/PartyArt. No separate server or runtime installation is required.'
 }
 finally { Pop-Location }

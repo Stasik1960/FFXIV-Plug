@@ -1,15 +1,24 @@
-Party Art 0.1.0 — verification
+Party Art 0.2.0 — verification
 
 Release solution build: passed, 0 warnings / 0 errors.
-Party Art console tests: passed, 9 scenarios / 197 assertions.
+Party Art console tests: passed, 21 scenarios / 1186 assertions.
 Existing Slap Your Friend console tests: passed, 12 scenarios / 128 assertions.
 Existing Emote Together console tests: passed, 625 assertions.
 
-Party Art checks cover the embedded 45-line artwork, verbatim /p prefixes,
-UTF-8 byte limits, command/control-character rejection, explicit starts,
-single active sequence, line order, timing, no catch-up bursts, cancellation,
-explicit restart, sender failure, backwards clocks, overflow and reentrancy.
+Checks cover all preset fields, supported channel prefixes, strict UTF-8 byte
+limits and command/control-character rejection; a 1000-message preset;
+immutable queued snapshots; ordering, global pacing across jobs and cancellation,
+no catch-up bursts, duplicate jobs, 15-second cooldown, bounded pending work,
+pending expiry, sender failure and synchronous cancellation from inside sender.
 
-The plugin compiles against the locally installed Dalamud API 15.
-Native chat submission, delivery, visual appearance and server throttling
-require an in-game check. No real game messages were sent by these tests.
+Trigger tests cover initial-load suppression, state edges, deferred duty entry,
+character/logout changes, temporary unavailable state, roster changes with
+invalid samples, same-duty territory transitions, leaving and re-entering a duty.
+
+The plugin compiles against the installed Dalamud API 15. The original embedded
+artwork is removed from the current source; wolf.jpg is bundled in the new ZIP.
+Native duty event signatures and chat-rate error IDs were checked against primary
+Dalamud source and game-data tables. No game actions or chat messages were sent.
+
+Native chat acceptance/delivery, live event timing, server throttle behavior and
+visual appearance in the actual game require an in-game check.
