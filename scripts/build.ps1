@@ -8,6 +8,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
     dotnet run --project tests/SlapYourFriend.Tests -c Release --no-build
     if ($LASTEXITCODE -ne 0) { throw 'Slap Your Friend tests failed.' }
+    dotnet run --project tests/PartyArt.Tests -c Release --no-build
+    if ($LASTEXITCODE -ne 0) { throw 'Party Art tests failed.' }
     $pluginOutput = Join-Path $projectRoot 'src/EmoteTogether.Plugin/bin/Release'
     $pluginDist = Join-Path $projectRoot 'dist/plugin'
     New-Item -ItemType Directory -Path $pluginDist -Force | Out-Null
@@ -26,6 +28,12 @@ try {
     $slapAssets = Join-Path $slapDist 'Assets'
     New-Item -ItemType Directory -Path $slapAssets -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $slapOutput 'Assets/friendly-slap.jpg') -Destination $slapAssets -Force
-    Write-Host 'Ready: dist/plugin and dist/SlapYourFriend. No separate server or runtime installation is required.'
+    $artOutput = Join-Path $projectRoot 'src/PartyArt.Plugin/bin/Release'
+    $artDist = Join-Path $projectRoot 'dist/PartyArt'
+    New-Item -ItemType Directory -Path $artDist -Force | Out-Null
+    foreach ($name in @('PartyArt.dll', 'PartyArt.json', 'PartyArt.deps.json', 'PartyArt.Core.dll')) {
+        Copy-Item -LiteralPath (Join-Path $artOutput $name) -Destination $artDist -Force
+    }
+    Write-Host 'Ready: dist/plugin, dist/SlapYourFriend and dist/PartyArt. No separate server or runtime installation is required.'
 }
 finally { Pop-Location }

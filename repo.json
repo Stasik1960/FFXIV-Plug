@@ -55,5 +55,34 @@
     "IsTestingExclusive": false,
     "LastUpdate": 1792970653,
     "Changelog": "Исправлено бесконечное ожидание текущей эмоции: пощёчина прерывает зацикленные эмоции. Стандартный текст /slap снова виден в чате. Запуск только после остановки на полсекунды; бег не расходует таймер. Уточнено определение домашнего мира при вводе имени."
+  },
+  {
+    "Author": "Ringoto",
+    "Name": "Party Art",
+    "InternalName": "PartyArt",
+    "AssemblyVersion": "0.1.0.0",
+    "Description": "Отправляет готовый рисунок из 45 строк в чат группы /p по кнопке или команде /partyart send. Предпросмотр, интервал между строками и остановка в любой момент. Плагин нужен только отправителю.",
+    "ApplicableVersion": "any",
+    "RepoUrl": "https://github.com/Stasik1960/FFXIV-Plug",
+    "Tags": [
+      "chat",
+      "party",
+      "social",
+      "art"
+    ],
+    "DalamudApiLevel": 15,
+    "LoadRequiredState": 0,
+    "LoadSync": false,
+    "CanUnloadAsync": true,
+    "LoadPriority": 0,
+    "Punchline": "Рисунок из символов в чате группы одним нажатием.",
+    "AcceptsFeedback": true,
+    "DownloadLinkInstall": "https://raw.githubusercontent.com/Stasik1960/FFXIV-Plug/main/plugins/PartyArt/0.1.0/PartyArt.zip",
+    "DownloadLinkUpdate": "https://raw.githubusercontent.com/Stasik1960/FFXIV-Plug/main/plugins/PartyArt/0.1.0/PartyArt.zip",
+    "DownloadLinkTesting": "https://raw.githubusercontent.com/Stasik1960/FFXIV-Plug/main/plugins/PartyArt/0.1.0/PartyArt.zip",
+    "IsHide": false,
+    "IsTestingExclusive": false,
+    "LastUpdate": 1793305187,
+    "Changelog": "Первый выпуск: рисунок из 45 строк по кнопке или /partyart send в чат группы /p. Предпросмотр, интервал 1–5 секунд, остановка кнопкой, закрытием окна или /partyart cancel. При выходе из группы, смене локации и отключении плагина очередь отменяется."
   }
 ]

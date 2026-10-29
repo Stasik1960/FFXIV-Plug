@@ -1,0 +1,20 @@
+<Project Sdk="Dalamud.NET.Sdk/15.0.0">
+  <PropertyGroup>
+    <Version>0.1.0</Version>
+    <AssemblyName>PartyArt</AssemblyName>
+    <RootNamespace>PartyArt.Plugin</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Author>Ringoto</Author>
+    <CanUnloadAsync>true</CanUnloadAsync>
+    <RepoUrl>https://github.com/Stasik1960/FFXIV-Plug</RepoUrl>
+    <Name>Party Art</Name>
+    <Punchline>Рисунок из символов в чате группы одним нажатием.</Punchline>
+    <Description>Отправляет готовый рисунок из 45 строк в чат группы /p по кнопке или команде /partyart send. Предпросмотр, интервал между строками и остановка в любой момент. Плагин нужен только отправителю.</Description>
+    <Tags>chat;party;social;art</Tags>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../PartyArt.Core/PartyArt.Core.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,15 @@
+Party Art 0.1.0 — verification
+
+Release solution build: passed, 0 warnings / 0 errors.
+Party Art console tests: passed, 9 scenarios / 197 assertions.
+Existing Slap Your Friend console tests: passed, 12 scenarios / 128 assertions.
+Existing Emote Together console tests: passed, 625 assertions.
+
+Party Art checks cover the embedded 45-line artwork, verbatim /p prefixes,
+UTF-8 byte limits, command/control-character rejection, explicit starts,
+single active sequence, line order, timing, no catch-up bursts, cancellation,
+explicit restart, sender failure, backwards clocks, overflow and reentrancy.
+
+The plugin compiles against the locally installed Dalamud API 15.
+Native chat submission, delivery, visual appearance and server throttling
+require an in-game check. No real game messages were sent by these tests.

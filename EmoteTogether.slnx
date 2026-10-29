@@ -5,9 +5,12 @@
     <Project Path="src/EmoteTogether.Protocol/EmoteTogether.Protocol.csproj" />
     <Project Path="src/SlapYourFriend.Core/SlapYourFriend.Core.csproj" />
     <Project Path="src/SlapYourFriend.Plugin/SlapYourFriend.Plugin.csproj" />
+    <Project Path="src/PartyArt.Core/PartyArt.Core.csproj" />
+    <Project Path="src/PartyArt.Plugin/PartyArt.Plugin.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/EmoteTogether.Tests/EmoteTogether.Tests.csproj" />
     <Project Path="tests/SlapYourFriend.Tests/SlapYourFriend.Tests.csproj" />
+    <Project Path="tests/PartyArt.Tests/PartyArt.Tests.csproj" />
   </Folder>
 </Solution>
