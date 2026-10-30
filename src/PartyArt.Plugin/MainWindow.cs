@@ -23,6 +23,12 @@ internal sealed class MainWindow : Window
         (PhraseTrigger.DutyWiped, "Вайп группы"),
         (PhraseTrigger.DutyRecommenced, "Повторная попытка после вайпа"),
     ];
+    private static readonly (PhraseTrigger Trigger, string Name)[] PvpTriggers =
+    [
+        (PhraseTrigger.PvpEntered, "Вход на PvP-карту"),
+        (PhraseTrigger.PvpStarted, "Начало PvP-матча"),
+        (PhraseTrigger.PvpCompleted, "Завершение PvP-матча"),
+    ];
     private static readonly (PhraseTrigger Trigger, string Name)[] CharacterTriggers =
     [
         (PhraseTrigger.CombatStarted, "Вход в бой"), (PhraseTrigger.CombatEnded, "Выход из боя"),
@@ -238,8 +244,9 @@ internal sealed class MainWindow : Window
         }
         Gap(3); ImGui.Separator(); ImGui.TextColored(Muted, "КОГДА ОТПРАВЛЯТЬ");
         if (preset.Triggers == PhraseTrigger.None) Wrapped("События не выбраны — доступна ручная отправка.", Muted);
-        DrawTriggerGroup(preset, "Подземелья и задания", DutyTriggers);
-        DrawTriggerGroup(preset, "Бой и персонаж", CharacterTriggers);
+        DrawTriggerGroup(preset, "Подземелья и задания · PvE", DutyTriggers);
+        DrawTriggerGroup(preset, "PvP", PvpTriggers);
+        DrawTriggerGroup(preset, "Бой и персонаж · PvE и PvP", CharacterTriggers);
         DrawTriggerGroup(preset, "Группа", PartyTriggers);
     }
 
@@ -254,10 +261,21 @@ internal sealed class MainWindow : Window
                 var selected = (preset.Triggers & trigger) != 0;
                 if (ImGui.Checkbox(label, ref selected))
                 { preset.Triggers = selected ? preset.Triggers | trigger : preset.Triggers & ~trigger; plugin.SaveConfiguration(); }
-                if (trigger == PhraseTrigger.DutyCompleted && ImGui.IsItemHovered())
-                    ImGui.SetTooltip("Срабатывает при подтверждённом завершении всего задания, обычно после последнего босса.");
-                if (trigger == PhraseTrigger.CombatEnded && ImGui.IsItemHovered())
-                    ImGui.SetTooltip("Любой выход из боя, включая вайп. Для победы используйте завершение задания.");
+                if (ImGui.IsItemHovered())
+                {
+                    if (trigger == PhraseTrigger.DutyCompleted)
+                        ImGui.SetTooltip("Только PvE: подтверждённое завершение всего задания, обычно после последнего босса. В PvP не срабатывает.");
+                    else if (DutyTriggers.Any(item => item.Trigger == trigger))
+                        ImGui.SetTooltip("Только подземелья и задания PvE. Для PvP выберите отдельное событие ниже.");
+                    else if (trigger == PhraseTrigger.PvpCompleted)
+                        ImGui.SetTooltip("Завершение PvP-матча при любом результате: победе или поражении.");
+                    else if (PvpTriggers.Any(item => item.Trigger == trigger))
+                        ImGui.SetTooltip("Только PvP-матчи. Приветствия для PvE назначаются отдельно.");
+                    else if (trigger == PhraseTrigger.CombatEnded)
+                        ImGui.SetTooltip("Любой выход из боя в PvE и PvP, включая поражение. Завершение задания и матча выбирается отдельно.");
+                    else if (CharacterTriggers.Any(item => item.Trigger == trigger))
+                        ImGui.SetTooltip("Это общее событие персонажа: действует в PvE и PvP.");
+                }
             }
         }
         finally { ImGui.Unindent(5 * Scale); }

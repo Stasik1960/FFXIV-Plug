@@ -9,6 +9,7 @@ using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using Lumina.Excel.Sheets;
 using PartyArt.Core;
 
 namespace PartyArt.Plugin;
@@ -19,6 +20,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static ICommandManager Commands { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
     [PluginService] internal static IClientState ClientState { get; private set; } = null!;
+    [PluginService] internal static IDataManager Data { get; private set; } = null!;
     [PluginService] internal static IPlayerState PlayerState { get; private set; } = null!;
     [PluginService] internal static IPartyList Party { get; private set; } = null!;
     [PluginService] internal static IObjectTable Objects { get; private set; } = null!;
@@ -36,6 +38,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly Queue<Guid> manualRequests = new();
     private readonly List<PendingEvent> pendingEvents = [];
     private readonly Dictionary<PhraseTrigger, long> lastEvents = [];
+    private readonly Dictionary<uint, bool> pvpTerritories;
     private readonly long started = Stopwatch.GetTimestamp();
     private PhrasePreset[] presets = [];
     private ChatContext? observedContext;
@@ -59,6 +62,7 @@ public sealed class Plugin : IDalamudPlugin
     {
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new();
         NormalizeConfiguration();
+        pvpTerritories = Data.GetExcelSheet<TerritoryType>().ToDictionary(row => row.RowId, row => row.IsPvpZone);
         presets = Configuration.Presets.Select(Clone).ToArray();
         automationEnabled = Configuration.AutomationEnabled;
         queue.IntervalMilliseconds = (int)Math.Round(Configuration.LineDelaySeconds * 1000);
@@ -228,8 +232,11 @@ public sealed class Plugin : IDalamudPlugin
         var members = ready && Party.Length > 0 ? Enumerable.Range(0, Party.Length).Select(i => Party[i]?.ContentId ?? 0).ToArray() : [];
         return new GameSnapshot(PlayerState.ContentId, Party.PartyId, ClientState.TerritoryType, ready,
             Duty.ContentFinderCondition.RowId != 0, Conditions[ConditionFlag.InCombat], local?.IsDead ?? false, members,
-            Duty.ContentFinderCondition.RowId);
+            Duty.ContentFinderCondition.RowId, IsPvpTerritory(ClientState.TerritoryType));
     }
+
+    // TerritoryChanged can precede the update of ClientState.IsPvP. Read the destination's game data.
+    private bool IsPvpTerritory(uint territory) => pvpTerritories.TryGetValue(territory, out var isPvP) ? isPvP : ClientState.IsPvP;
 
     private void Enqueue(PhrasePreset preset, ChatContext context, long now, bool manual)
     {
@@ -292,6 +299,9 @@ public sealed class Plugin : IDalamudPlugin
             if (disposed || !automationEnabled || !ClientState.IsLoggedIn || PlayerState.ContentId == 0) return;
             var territory = args.TerritoryType.RowId;
             if (territory == 0 || territory != ClientState.TerritoryType) return;
+            var isPvP = args.TerritoryType.IsValid ? args.TerritoryType.Value.IsPvpZone : IsPvpTerritory(territory);
+            trigger = TriggerRouting.RouteDutyEvent(trigger, isPvP);
+            if (trigger == PhraseTrigger.None) return;
             var partyId = Party.PartyId;
             if (partyId == 0 && observedContext is { } stable && stable.CharacterId == PlayerState.ContentId)
                 partyId = stable.PartyId;
@@ -339,7 +349,7 @@ public sealed class Plugin : IDalamudPlugin
             preset.Name = string.IsNullOrWhiteSpace(preset.Name) ? "Новая заготовка" : preset.Name;
             preset.Messages ??= [];
             if (!Enum.IsDefined(preset.Channel)) preset.Channel = ChatChannel.Party;
-            preset.Triggers &= (PhraseTrigger)4095;
+            preset.Triggers &= TriggerRouting.KnownTriggers;
         }
     }
 

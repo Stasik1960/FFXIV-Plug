@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | **[Emote Together](docs/EmoteTogether.md)** · 0.4.0 | Эмоциональная группа до восьми игроков, приглашения, синхронный запуск эмоций и передача лидерства. | `/emotegroup` |
 | **[Slap Your Friend](docs/SlapYourFriend.md)** · 0.1.1 | Автоматическая пощёчина выбранным игрокам после остановки рядом; индивидуальный интервал повторения. | `/slapfriend` |
-| **[Party Art](docs/PartyArt.md)** · 0.2.0 | Свои заготовки сообщений с ручным запуском и 12 автоматическими игровыми событиями. | `/partyart` |
+| **[Party Art](docs/PartyArt.md)** · 0.2.1 | Свои заготовки сообщений с ручным запуском и 15 автоматическими событиями, отдельно для PvE и PvP. | `/partyart` |
 
 ## Установка
 
@@ -38,7 +38,7 @@ https://raw.githubusercontent.com/Stasik1960/FFXIV-Plug/main/repo.json
 ```powershell
 ./scripts/package-repository.ps1 -ReleaseTag v0.4.0
 ./scripts/package-slap.ps1 -ReleaseTag v0.1.1
-./scripts/package-party-art.ps1 -ReleaseTag v0.2.0
+./scripts/package-party-art.ps1 -ReleaseTag v0.2.1
 ```
 
 Каждый скрипт формирует собственный ZIP и SHA256 в `plugins/<InternalName>/<version>/`, проверяет архив и обновляет только запись своего плагина в `repo.json`. Записи остальных плагинов сохраняются. Исходники, новый ZIP, контрольную сумму и индекс следует публиковать одним коммитом. Для уже опубликованной версии используйте её существующий архив; изменения выпускайте под новым номером.

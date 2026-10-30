@@ -1,7 +1,7 @@
-Party Art 0.2.0 — verification
+Party Art 0.2.1 — verification
 
 Release solution build: passed, 0 warnings / 0 errors.
-Party Art console tests: passed, 21 scenarios / 1186 assertions.
+Party Art console tests: passed, 26 scenarios / 1250 assertions.
 Existing Slap Your Friend console tests: passed, 12 scenarios / 128 assertions.
 Existing Emote Together console tests: passed, 625 assertions.
 
@@ -14,6 +14,14 @@ pending expiry, sender failure and synchronous cancellation from inside sender.
 Trigger tests cover initial-load suppression, state edges, deferred duty entry,
 character/logout changes, temporary unavailable state, roster changes with
 invalid samples, same-duty territory transitions, leaving and re-entering a duty.
+
+PvP regression checks add 64 assertions covering separate entry/start/completion
+routing, suppression of PvE wipe/recommence in PvP, preserved old numeric flags,
+new flags surviving configuration normalization, loading transitions, PvE-to-PvP
+and PvP-to-PvE transitions, same-duty movement, and shared combat/death triggers.
+Runtime classification reads TerritoryType.IsPvpZone from the destination's game
+data and native event metadata instead of relying on a possibly stale live zone
+flag. The broader ContentFinderCondition.PvP minigame flag is not used.
 
 The plugin compiles against the installed Dalamud API 15. The original embedded
 artwork is removed from the current source; wolf.jpg is bundled in the new ZIP.

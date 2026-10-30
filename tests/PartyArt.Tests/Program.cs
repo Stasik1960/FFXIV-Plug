@@ -27,7 +27,10 @@ internal static class Program
             var triggerAssertions = TriggerTrackerChecks.Run();
             assertions += triggerAssertions;
             Console.WriteLine($"PASS: Party Art trigger tracking ({triggerAssertions} assertions).");
-            Console.WriteLine($"PASS: Party Art presets, payloads, paced queue and trigger tracking (21 scenarios, {assertions} assertions). No game calls or chat messages sent.");
+            var pvpAssertions = PvpTriggerChecks.Run();
+            assertions += pvpAssertions;
+            Console.WriteLine($"PASS: Party Art separate PvE and PvP triggers ({pvpAssertions} assertions).");
+            Console.WriteLine($"PASS: Party Art presets, payloads, paced queue and trigger tracking (26 scenarios, {assertions} assertions). No game calls or chat messages sent.");
             return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }

@@ -10,7 +10,8 @@ public sealed record GameSnapshot(
     bool InCombat,
     bool IsDead,
     ulong[] Members,
-    uint DutyId = 0);
+    uint DutyId = 0,
+    bool IsPvP = false);
 
 /// <summary>Detects observed edges without interpreting an initial or temporarily unavailable sample as an event.</summary>
 public sealed class TriggerTracker
@@ -85,11 +86,11 @@ public sealed class TriggerTracker
             // after loading, because its metadata may still describe the previous area.
             var sameDuty = pendingOriginInDuty && pendingOriginDutyId != 0 &&
                 snapshot.DutyId != 0 && pendingOriginDutyId == snapshot.DutyId;
-            if (snapshot.InDuty && !sameDuty) result |= PhraseTrigger.DutyEntered;
+            if (snapshot.InDuty && !sameDuty) result |= TriggerRouting.RouteDutyEvent(PhraseTrigger.DutyEntered, snapshot.IsPvP);
             pendingEntry = false;
         }
         else if (wasInDuty && snapshot.InDuty && dutyId != 0 && snapshot.DutyId != 0 && dutyId != snapshot.DutyId)
-            result |= PhraseTrigger.DutyEntered;
+            result |= TriggerRouting.RouteDutyEvent(PhraseTrigger.DutyEntered, snapshot.IsPvP);
         wasInDuty = snapshot.InDuty;
         dutyId = snapshot.InDuty ? snapshot.DutyId : 0;
 

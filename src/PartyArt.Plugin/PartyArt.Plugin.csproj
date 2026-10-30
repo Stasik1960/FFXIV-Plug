@@ -1,6 +1,6 @@
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <AssemblyName>PartyArt</AssemblyName>
     <RootNamespace>PartyArt.Plugin</RootNamespace>
     <Nullable>enable</Nullable>
@@ -11,7 +11,7 @@
     <RepoUrl>https://github.com/Stasik1960/FFXIV-Plug</RepoUrl>
     <Name>Party Art</Name>
     <Punchline>Ваши фразы в нужный момент.</Punchline>
-    <Description>Создавайте заготовки из нескольких сообщений и назначайте автоматические события: вход и завершение данжа, вайп, бой, смерть, воскрешение и изменения группы. Ручной запуск, каналы группы и альянса, локальная проверка, общая очередь с регулируемой паузой. Интерфейс с отключаемым фоном с волком. Автор Ringoto.</Description>
+    <Description>Создавайте заготовки из нескольких сообщений и назначайте автоматические события: вход и завершение данжа, отдельные вход, начало и завершение PvP-матча, вайп, бой, смерть, воскрешение и изменения группы. Ручной запуск, каналы группы и альянса, локальная проверка, общая очередь с регулируемой паузой. Интерфейс с отключаемым фоном с волком. Автор Ringoto.</Description>
     <Tags>chat;party;social;art</Tags>
   </PropertyGroup>
   <ItemGroup>

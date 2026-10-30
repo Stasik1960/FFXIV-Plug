@@ -16,6 +16,9 @@ public enum PhraseTrigger
     PartyJoined = 512,
     PartyMemberJoined = 1024,
     PartyMemberLeft = 2048,
+    PvpEntered = 4096,
+    PvpStarted = 8192,
+    PvpCompleted = 16384,
 }
 
 public enum ChatChannel { Party, Alliance, Echo }
