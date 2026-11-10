@@ -1,4 +1,4 @@
-# Emote Together · 0.4.0
+# Emote Together · 0.4.1
 
 Автор: **Ringoto**.
 
@@ -21,9 +21,9 @@ https://raw.githubusercontent.com/Stasik1960/FFXIV-Plug/main/repo.json
 
 Сделайте это на компьютере каждого участника. Копировать DLL вручную, включать Developer Mode или настраивать сервер не требуется. Если ранее была загружена dev-версия Emote Together, отключите её и её запись в **Dev Plugin Locations** перед установкой из каталога.
 
-Сборка **0.4.0 / Dalamud API 15** скомпилирована с Dalamud **15.0.3.9**. При смене API нужна совместимая пересборка. Для использования плагина отдельная установка .NET не требуется: используется среда Dalamud. **Обновите всех участников до 0.4.0:** протокол ET4 несовместим с предыдущими версиями.
+Сборка **0.4.1** использует Dalamud API 15. Для игры на патче 7.58 нужен совместимый с ним Dalamud. Плагин использует среду .NET самого Dalamud. Версии **0.4.0** и **0.4.1** используют протокол ET4 и могут участвовать в одной группе.
 
-Каталог и ZIP доступны без входа в GitHub. Установщик скачивает [версию 0.4.0](https://raw.githubusercontent.com/Stasik1960/FFXIV-Plug/main/plugins/EmoteTogether/0.4.0/EmoteTogether.zip); её контрольная сумма находится [рядом с ZIP](../plugins/EmoteTogether/0.4.0/EmoteTogether.zip.sha256). Уже установленный плагин обновляется обычной кнопкой обновления в `/xlplugins`.
+Каталог и ZIP доступны без входа в GitHub. Уже установленный плагин обновляется кнопкой обновления в `/xlplugins`. [ZIP версии 0.4.1](https://raw.githubusercontent.com/Stasik1960/FFXIV-Plug/main/plugins/EmoteTogether/0.4.1/EmoteTogether.zip) · [Контрольная сумма](../plugins/EmoteTogether/0.4.1/EmoteTogether.zip.sha256)
 
 ## Как пользоваться
 

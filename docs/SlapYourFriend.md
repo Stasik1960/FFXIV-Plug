@@ -1,4 +1,4 @@
-# Slap Your Friend · 0.1.1
+# Slap Your Friend · 0.1.2
 
 Автор: **Ringoto**.
 
